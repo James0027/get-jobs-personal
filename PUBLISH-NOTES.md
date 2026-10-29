@@ -36,14 +36,18 @@
 - Git 历史：本仓库为单一根提交，未复制作者本机的历史提交，因此历史中也不存在上述数据
 
 ## 运行方式（本机验证过的路径）
-前置：JDK 21；Node.js（前端构建用）。数据库文件 `db/getjobs.db` 不在仓库内（含个人数据），
-需按 `README.md` / `start-local.ps1` 说明放一份库文件模板后再启动。
+前置：JDK 21。数据库文件 `db/getjobs.db` 不在仓库内（含个人数据），需按 `README.md` /
+`start-local.ps1` 说明放一份库文件模板后再启动。
 
-1. 后端：`./gradlew bootRun`（或先 `./gradlew bootJar` 后 `java -jar build/libs/get_jobs-2.0.1.jar`）
-2. 前端：`cd front && npm i && npm run build`（产物 `front/out`，也可由 `next build` 内嵌进 jar 的 `dist`）
-3. 端口：后端 API `8888`、前端页面 `6866`（`src/main/resources/application.yaml`、
-   `front/server.config.js`）
-4. Windows 便捷入口：`启动.cmd` / `停止.cmd`
+1. 后端（同时就是管理页入口）：`./gradlew bootRun`，或先 `./gradlew bootJar` 再
+   `java -jar build/libs/get_jobs-2.0.1.jar`
+2. **管理页由这一个 jar 直接提供**（jar 内 `BOOT-INF/classes/dist/` 是已构建好的静态页面），
+   打开 `http://localhost:8888` 即可使用，**不需要另起前端服务、不需要 6866**。
+3. 端口：只有 `8888`（`src/main/resources/application.yaml` 的 `server.port`）。
+   `front/server.config.js` 里的 6866 只是前端独立开发模式（`next dev`）用的端口，发布运行不需要。
+4. 仅当需要改前端源码时：`cd front && npm i && npm run build`，再把产物同步进
+   `src/main/resources/dist/` 后重新 `bootJar`（该目录本身不入库，属构建产物）。
+5. Windows 便捷入口：`启动.cmd`（优先用 `build/libs/get_jobs-2.0.1.jar`，没有就跑 `bootRun`）/ `停止.cmd`
 
 ## 已知边界（未完成项，详见 `feature/boss-live-integration` 分支的 `PENDING-BOSS-LIVE.md`）
 - PDF 简历**真实发送**未实现：决策为 PDF 时返回 `blocked/PDF_SEND_NOT_IMPLEMENTED`，不降级发图
