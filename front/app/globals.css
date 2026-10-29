@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 保持同名变量，切换为中性灰阶，圆角 8px (0.5rem) */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 240 6% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+    --accent: 240 5% 96%;
+    --accent-foreground: 240 6% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 240 5% 65%;
+    --radius: 0.5rem;
+
+    /* 辅助中性色定义 */
+    --color-stroke: #e4e4e7;
+    --color-strokedark: #27272a;
+    --color-hoverdark: #18181b;
+    --color-titlebg: #f4f4f5;
+    --color-titlebg2: #f4f4f5;
+    --color-titlebgdark: #27272a;
+    --color-btndark: #27272a;
+    --color-white: #ffffff;
+    --color-black: #09090b;
+    --color-blackho: #18181b;
+    --color-blacksection: #09090b;
+    --color-primary: #18181b;
+    --color-primaryho: #27272a;
+    --color-meta: #10b981;
+    --color-waterloo: #71717a;
+    --color-manatee: #a1a1aa;
+    --color-alabaster: #fafafa;
+    --color-zumthor: #f4f4f5;
+    --color-socialicon: #a1a1aa;
+  }
+
+  .dark {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 4%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 6% 10%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 4% 18%;
+    --input: 240 4% 18%;
+    --ring: 240 5% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* 主题柔和背景辅助类：保留类名但改为中性无彩色，低透明度灰阶 */
+.accent-teal { --accent-rgb: 161 161 170; }
+.accent-orange { --accent-rgb: 161 161 170; }
+.accent-amber { --accent-rgb: 161 161 170; }
+.accent-sky { --accent-rgb: 161 161 170; }
+
+.content-bg {
+  background-color: hsl(var(--background));
+}
+
+/* 弹出层与辅助工具类 */
+@layer utilities {
+  .dropdown-panel {
+    @apply fixed z-[99999] max-h-56 overflow-y-auto rounded-lg border border-border shadow-md bg-background text-foreground;
+  }
+
+  .dark .dropdown-panel {
+    @apply bg-neutral-900 border-neutral-800;
+  }
+
+  /* 强制覆盖 input 自动填充样式 */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px rgba(128, 128, 128, 0.05) inset !important;
+    -webkit-text-fill-color: inherit !important;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Framer Motion 动画辅助类 */
+  .animate_top {
+    animation: animateTop 0.6s ease-out;
+  }
+
+  .animate_left {
+    animation: animateLeft 0.6s ease-out;
+  }
+
+  .animate_right {
+    animation: animateRight 0.6s ease-out;
+  }
+
+  @keyframes animateTop {
+    0% {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes animateLeft {
+    0% {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes animateRight {
+    0% {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+}

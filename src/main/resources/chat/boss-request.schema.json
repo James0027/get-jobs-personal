@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BOSS AI request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requestId", "task", "conversationId", "lastInboundMessageId", "profileVersion", "profile", "job", "messages", "policy"],
+  "properties": {
+    "schemaVersion": {"const": "1"},
+    "requestId": {"type": "string"},
+    "task": {"enum": ["MATCH_EXPLANATION", "FOLLOW_UP"]},
+    "conversationId": {"type": "string"},
+    "lastInboundMessageId": {"type": "string"},
+    "profileVersion": {"type": "string"},
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "graduationYear", "acceptedCities", "facts", "approvedResumeAssetId", "autoResume", "autoLocation", "enabled"],
+      "properties": {
+        "version": {"type": "string"}, "graduationYear": {"type": ["integer", "null"]},
+        "acceptedCities": {"type": "array", "items": {"type": "string"}},
+        "facts": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "text"], "properties": {"id": {"type": "string"}, "text": {"type": "string"}}}},
+        "approvedResumeAssetId": {"type": "string"}, "autoResume": {"type": "boolean"}, "autoLocation": {"type": "boolean"}, "enabled": {"type": "boolean"}
+      }
+    },
+    "job": {"type": "object", "additionalProperties": false, "required": ["title", "jd"], "properties": {"title": {"type": "string"}, "jd": {"type": "string"}, "keyword": {"type": "string"}}},
+    "messages": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "sender", "text"], "properties": {"id": {"type": "string"}, "sender": {"enum": ["RECRUITER", "SELF", "SYSTEM"]}, "text": {"type": "string"}}}},
+    "policy": {"type": "object", "additionalProperties": false, "required": ["maxChars", "autoResume", "autoLocation"], "properties": {"maxChars": {"enum": [60, 300]}, "autoResume": {"type": "boolean"}, "autoLocation": {"type": "boolean"}}}
+  }
+}
