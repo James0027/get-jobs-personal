@@ -41,6 +41,18 @@ public class AiService {
         String baseUrl = cfg.get("BASE_URL");
         String apiKey = cfg.get("API_KEY");
         String model = cfg.get("MODEL");
+        // 支持 "模型:推理强度" 写法，例如 deepseek/deepseek-v4.1-flash:max
+        String reasoningEffort = null;
+        if (model != null) {
+            int separator = model.lastIndexOf(':');
+            if (separator > 0) {
+                String suffix = model.substring(separator + 1).trim().toLowerCase();
+                if (isReasoningEffort(suffix)) {
+                    reasoningEffort = suffix;
+                    model = model.substring(0, separator).trim();
+                }
+            }
+        }
         // 根据模型类型选择兼容的端点（部分“推理/Reasoning”模型需要使用 Responses API）
         String endpoint = isResponsesModel(model)
                 ? buildResponsesEndpoint(baseUrl)
@@ -59,10 +71,11 @@ public class AiService {
         if (endpoint.endsWith("/responses")) {
             // Responses API 采用 input 字段
             requestData.put("input", content);
-            // 如需显式控制推理强度，可按需开启：
-            // JSONObject reasoning = new JSONObject();
-            // reasoning.put("effort", "medium");
-            // requestData.put("reasoning", reasoning);
+            if (reasoningEffort != null) {
+                JSONObject reasoning = new JSONObject();
+                reasoning.put("effort", reasoningEffort);
+                requestData.put("reasoning", reasoning);
+            }
         } else {
             // Chat Completions API 使用 messages
             JSONArray messages = new JSONArray();
@@ -71,6 +84,9 @@ public class AiService {
             message.put("content", content);
             messages.put(message);
             requestData.put("messages", messages);
+            if (reasoningEffort != null) {
+                requestData.put("reasoning_effort", reasoningEffort);
+            }
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -94,8 +110,8 @@ public class AiService {
 
                 String responseContent;
                 if (endpoint.endsWith("/responses")) {
-                    // Responses API：优先读取 output_text
-                    responseContent = responseObject.optString("output_text", null);
+                    // Responses API：标准返回没有 output_text 字段，正文在 output[].content[] 里
+                    responseContent = extractResponsesContent(responseObject);
                     if (responseContent == null || responseContent.isEmpty()) {
                         // 兜底：尝试从通用 choices/message 结构读取（部分代理/兼容层会返回该结构）
                         try {
@@ -136,7 +152,7 @@ public class AiService {
                 if (!endpoint.endsWith("/responses") && containsReasoningParamError(response.body())) {
                     String fallbackEndpoint = buildResponsesEndpoint(baseUrl);
                     log.warn("检测到 reasoning 相关参数错误，自动切换到 Responses API 重试: {}", fallbackEndpoint);
-                    return sendRequestViaResponses(content, apiKey, model, fallbackEndpoint);
+                    return sendRequestViaResponses(content, apiKey, model, reasoningEffort, fallbackEndpoint);
                 }
                 throw new RuntimeException("AI请求失败，状态码: " + response.statusCode() + ", 详情: " + response.body());
             }
@@ -187,6 +203,43 @@ public class AiService {
     }
 
     /**
+     * 校验推理强度取值，非法值不当作强度后缀，保持原模型名。
+     */
+    private boolean isReasoningEffort(String value) {
+        return "off".equals(value) || "low".equals(value) || "medium".equals(value)
+                || "high".equals(value) || "xhigh".equals(value) || "max".equals(value);
+    }
+
+    /**
+     * 从 Responses API 的标准返回体中提取正文。
+     * 正文结构：output[] 中 type=message 的项，其 content[] 中 type=output_text 的 text。
+     */
+    private String extractResponsesContent(JSONObject responseObject) {
+        String outputText = responseObject.optString("output_text", null);
+        if (outputText != null && !outputText.isEmpty()) {
+            return outputText;
+        }
+        JSONArray output = responseObject.optJSONArray("output");
+        if (output == null) return null;
+        StringBuilder content = new StringBuilder();
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item = output.optJSONObject(i);
+            if (item == null || !"message".equals(item.optString("type"))) continue;
+            JSONArray parts = item.optJSONArray("content");
+            if (parts == null) continue;
+            for (int j = 0; j < parts.length(); j++) {
+                JSONObject part = parts.optJSONObject(j);
+                if (part == null || !"output_text".equals(part.optString("type"))) continue;
+                String text = part.optString("text", "");
+                if (text.isEmpty()) continue;
+                if (content.length() > 0) content.append('\n');
+                content.append(text);
+            }
+        }
+        return content.length() > 0 ? content.toString() : null;
+    }
+
+    /**
      * 检查错误响应中是否包含 reasoning 相关参数错误（如 reasoning.summary unsupported_value）
      */
     private boolean containsReasoningParamError(String body) {
@@ -199,7 +252,8 @@ public class AiService {
     /**
      * 使用 Responses API 发送一次请求（用于自动降级/重试）
      */
-    private String sendRequestViaResponses(String content, String apiKey, String model, String endpoint) {
+    private String sendRequestViaResponses(String content, String apiKey, String model,
+                                           String reasoningEffort, String endpoint) {
         int timeoutInSeconds = 60;
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(timeoutInSeconds))
@@ -209,6 +263,11 @@ public class AiService {
         requestData.put("model", model);
         requestData.put("temperature", 0.5);
         requestData.put("input", content);
+        if (reasoningEffort != null) {
+            JSONObject reasoning = new JSONObject();
+            reasoning.put("effort", reasoningEffort);
+            requestData.put("reasoning", reasoning);
+        }
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -223,7 +282,7 @@ public class AiService {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 JSONObject resp = new JSONObject(response.body());
-                String outputText = resp.optString("output_text", null);
+                String outputText = extractResponsesContent(resp);
                 if (outputText != null && !outputText.isEmpty()) {
                     return outputText;
                 }
