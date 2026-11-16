@@ -1,0 +1,58 @@
+Get Jobs 2.0.1 — Windows 便携包
+
+版本 / 提交
+- 版本: 2.0.1
+- 提交: __COMMIT__
+- JAR SHA256: __JAR_SHA256__
+- 完整 ZIP 的 SHA256 见包外 SHA256SUMS.txt
+- PR: https://github.com/James0027/get-jobs-personal/pull/1
+
+包含内容
+- get_jobs-2.0.1.jar：后端 + 管理页面静态资源（dist 已打进 JAR，不需要另起前端）
+- patchright-driver：BOSS 自动化使用的 Patchright driver（1.62.1，含所需 node_modules）
+- db/getjobs.db：纯 schema 模板（25 张表、0 行数据）；首次启动会自动写入默认配置
+- browser-data：空目录，运行时保存浏览器 profile 与登录态
+- check-port.ps1：启动前的 8888 占用与实例身份检查
+- 启动.cmd / 停止.cmd / 本说明
+
+外部运行依赖（本包不内置）
+- Windows 10/11
+- JDK 21（启动脚本优先使用 JAVA_HOME，其次自动探测 %USERPROFILE%\.jdks\jdk-21*）
+- Node.js 20+ 在 PATH 中，或显式设置 PLAYWRIGHT_NODEJS_PATH
+- 本机已安装 Google Chrome（登录/自动化使用 chrome 通道）
+因此这不是“免安装”包：JDK、Node.js、Chrome 需由使用者提供。
+
+启动
+1. 双击 启动.cmd（控制台窗口标题为 Get Jobs）。
+2. 脚本先检查 127.0.0.1:8888：
+   - 空闲：继续启动本软件；
+   - 已被本软件占用：只打开 http://localhost:8888，不重复启动；
+   - 被其他服务占用：显示真实检查结果并退出，不会把别人的页面当成启动成功。
+3. 服务就绪后自动打开 http://localhost:8888（主端口仅绑定 127.0.0.1）。
+4. 可选静态 sidecar 使用 http://127.0.0.1:6866；若 Windows 保留或占用了该端口，
+   启动日志会提示并跳过，管理页面始终可由 8888 访问。
+
+停止
+- 关闭标题为 "Get Jobs" 的控制台窗口，应用会执行正常 shutdown hooks。
+- 停止.cmd 只提示上述操作，不按端口杀进程，也不会强制结束其他服务。
+- 本包不提供按 PID/端口强杀的兜底逻辑。
+
+数据与隐私
+- 配置、Cookie、投递记录和聊天记录保存在 db/getjobs.db。
+- 浏览器登录态保存在 browser-data/。
+- 升级时不要删除或覆盖 db/ 与 browser-data/。
+- 不要把 db/getjobs.db、browser-data、简历、日志或 API Key 分享给他人。
+- ZIP 内的 db/getjobs.db 是 0 行 schema 模板；运行后写入的配置/登录态不会被回写进 ZIP。
+
+安全默认
+- app.scheduling.enabled=false（定时任务关闭）
+- app.browser.auto-start=false（不自动启动自动化浏览器）
+- app.browser.open-ui=false（由启动脚本负责打开页面）
+- boss.read-only-check-mode=true（禁止真实投递与外发）
+这些默认值不通过删除开关来“修复”；如需变更，应按项目文档做明确配置审查。
+
+已知边界
+- 真实受控执行 Gateway 未接入，生产环境默认拒绝（PLATFORM_ENTRY_COUNT_AND_IDENTITY_NOT_VERIFIED）。
+- PDF 简历真实发送未实现，决策为 PDF 时返回 blocked/PDF_SEND_NOT_IMPLEMENTED。
+- 登录需要人工扫码/验证码；登录浏览器只有在页面真实可见且非 about:blank 时才报告 running。
+- 仅 Boss 与猎聘维护中；51job、智联不再保证可用。
