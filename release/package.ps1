@@ -33,6 +33,7 @@ Copy-Item $PatchrightDir (Join-Path $stage 'patchright-driver') -Recurse
 Copy-Item (Join-Path $releaseDir 'start.cmd') (Join-Path $stage '启动.cmd')
 Copy-Item (Join-Path $releaseDir 'stop.cmd') (Join-Path $stage '停止.cmd')
 Copy-Item (Join-Path $releaseDir 'check-port.ps1') (Join-Path $stage 'check-port.ps1')
+Copy-Item (Join-Path $releaseDir 'find-jdk.ps1') (Join-Path $stage 'find-jdk.ps1')
 
 $dbPath = Join-Path $stage 'db/getjobs.db'
 & $Sqlite $dbPath ".read $releaseDir\db-template.sql"
@@ -72,6 +73,7 @@ $lines = @(
     "$((Get-FileHash (Join-Path $stage '启动.cmd') -Algorithm SHA256).Hash)  启动.cmd",
     "$((Get-FileHash (Join-Path $stage '停止.cmd') -Algorithm SHA256).Hash)  停止.cmd",
     "$((Get-FileHash (Join-Path $stage 'check-port.ps1') -Algorithm SHA256).Hash)  check-port.ps1",
+    "$((Get-FileHash (Join-Path $stage 'find-jdk.ps1') -Algorithm SHA256).Hash)  find-jdk.ps1",
     "$((Get-FileHash (Join-Path $stage 'README-启动说明.txt') -Algorithm SHA256).Hash)  README-启动说明.txt"
 )
 [IO.File]::WriteAllText((Join-Path $stageRoot 'SHA256SUMS.txt'), (($lines -join "`r`n") + "`r`n"), [Text.UTF8Encoding]::new($false))

@@ -12,7 +12,7 @@ Get Jobs 2.0.1 — Windows 便携包
 - patchright-driver：BOSS 自动化使用的 Patchright driver（1.62.1，含所需 node_modules）
 - db/getjobs.db：纯 schema 模板（25 张表、0 行数据）；首次启动会自动写入默认配置
 - browser-data：空目录，运行时保存浏览器 profile 与登录态
-- check-port.ps1：启动前的 8888 占用与实例身份检查
+- check-port.ps1：启动前的 8888 占用与实例身份检查`r`n- find-jdk.ps1：在隐藏目录/常见安装位置定位 JDK 21
 - 启动.cmd / 停止.cmd / 本说明
 
 外部运行依赖（本包不内置）

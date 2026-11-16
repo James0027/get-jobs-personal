@@ -5,7 +5,7 @@ title Get Jobs
 
 rem Refuse to start when 8888 is already used by another service.
 rem Exit 10 = free, 0 = this Get Jobs instance, 11/12 = occupied by something else.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-port.ps1" -Port 8888
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-port.ps1" -Port 8888
 set "PORT_STATE=%ERRORLEVEL%"
 
 if "%PORT_STATE%"=="0" (
@@ -22,15 +22,13 @@ if not "%PORT_STATE%"=="10" (
 )
 
 rem JDK 21 required. Uses JAVA_HOME when valid, otherwise auto-detects a local JDK 21.
-if defined JAVA_HOME if exist "%JAVA_HOME%\bin\java.exe" goto :havejdk
 set "JAVA_HOME="
-for /d %%D in ("%USERPROFILE%\.jdks\jdk-21*") do if not defined JAVA_HOME set "JAVA_HOME=%%~fD"
-for /d %%D in ("%USERPROFILE%\.gradle\jdks\jdk-21*") do if not defined JAVA_HOME set "JAVA_HOME=%%~fD"
+for /f "delims=" %%D in ('powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0find-jdk.ps1"') do if not defined JAVA_HOME set "JAVA_HOME=%%D"
 if not defined JAVA_HOME goto :nojdk
 :havejdk
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$v = & '%JAVA_HOME%\bin\java.exe' -version 2>&1 | Select-Object -First 1; if($v -notmatch 'version \"21\.'){ Write-Output ('[ERROR] JDK 21 required, found: '+$v); exit 1 }"
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$v = & '%JAVA_HOME%\bin\java.exe' -version 2>&1 | Select-Object -First 1; if($v -notmatch '21\.'){ Write-Output ('[ERROR] JDK 21 required, found: '+$v); exit 1 }; exit 0"
 if errorlevel 1 goto :nojdk
 
 rem Playwright needs Node.js. Honor an existing value, else take node.exe from PATH.
@@ -55,7 +53,7 @@ echo ============================================
 echo.
 
 rem Open the browser only after this instance answers its identity endpoint.
-start "" /b powershell -NoProfile -ExecutionPolicy Bypass -Command "for($i=0;$i -lt 120;$i++){ try{ $r=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8888/api/login-only/status' -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process 'http://localhost:8888'; exit 0 } }catch{}; Start-Sleep -Milliseconds 1000 }"
+start "" /b powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "for($i=0;$i -lt 120;$i++){ try{ $r=Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8888/api/login-only/status' -TimeoutSec 2; if($r.StatusCode -eq 200){ Start-Process 'http://localhost:8888'; exit 0 } }catch{}; Start-Sleep -Milliseconds 1000 }"
 
 "%JAVA_HOME%\bin\java.exe" %SAFE_OPTS% -jar "%~dp0get_jobs-2.0.1.jar"
 echo.
