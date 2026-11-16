@@ -26,12 +26,34 @@ public final class ChatContracts {
         public FollowUp { cooldownHours=cooldownHours==null?168:cooldownHours; maxPerConversation=maxPerConversation==null?1:maxPerConversation; }
         public static FollowUp defaults(){ return new FollowUp(false,168,1); }
     }
+    /** Structured, overrideable job intentions. Facts remain separate free-form supplementary information. */
+    public record JobIntentions(
+            String workType, String expectedSalary, String arrivalIntention,
+            String availableFrom, Integer weeklyAvailabilityDays
+    ) {
+        @JsonCreator
+        public JobIntentions(
+                @JsonProperty("workType") String workType,
+                @JsonProperty("expectedSalary") String expectedSalary,
+                @JsonProperty("arrivalIntention") String arrivalIntention,
+                @JsonProperty("availableFrom") String availableFrom,
+                @JsonProperty("weeklyAvailabilityDays") Integer weeklyAvailabilityDays
+        ) {
+            this.workType = workType == null ? "" : workType;
+            this.expectedSalary = expectedSalary == null ? "" : expectedSalary;
+            this.arrivalIntention = arrivalIntention == null ? "" : arrivalIntention;
+            this.availableFrom = availableFrom == null ? "" : availableFrom;
+            this.weeklyAvailabilityDays = weeklyAvailabilityDays;
+        }
+        public static JobIntentions empty() { return new JobIntentions("", "", "", "", null); }
+    }
     public record Profile(
             String version, Integer graduationYear, List<String> acceptedCities,
             List<Fact> facts, String approvedResumeAssetId, boolean autoResume,
             boolean autoLocation, boolean enabled,
             Resume resume, String approvedPdfAssetId, String resumeText, String resumeTextHash,
-            String approvedResumeTextHash, List<String> derivedFactIds, boolean autoReply, FollowUp followUp
+            String approvedResumeTextHash, List<String> derivedFactIds, boolean autoReply, FollowUp followUp,
+            String approvedImageAssetId, String preferredResumeAssetKind, JobIntentions intentions
     ) {
         @JsonCreator
         public Profile(
@@ -50,7 +72,10 @@ public final class ChatContracts {
                 @JsonProperty("approvedResumeTextHash") String approvedResumeTextHash,
                 @JsonProperty("derivedFactIds") List<String> derivedFactIds,
                 @JsonProperty("autoReply") boolean autoReply,
-                @JsonProperty("followUp") FollowUp followUp
+                @JsonProperty("followUp") FollowUp followUp,
+                @JsonProperty("approvedImageAssetId") String approvedImageAssetId,
+                @JsonProperty("preferredResumeAssetKind") String preferredResumeAssetKind,
+                @JsonProperty("intentions") JobIntentions intentions
         ) {
             this.version = version == null ? "" : version;
             this.graduationYear = graduationYear;
@@ -68,6 +93,19 @@ public final class ChatContracts {
             this.derivedFactIds = derivedFactIds == null ? List.of() : List.copyOf(derivedFactIds);
             this.autoReply = autoReply;
             this.followUp = followUp == null ? FollowUp.defaults() : followUp;
+            this.approvedImageAssetId = approvedImageAssetId == null ? "" : approvedImageAssetId;
+            this.preferredResumeAssetKind = normalizeResumeKind(preferredResumeAssetKind);
+            this.intentions = intentions == null ? JobIntentions.empty() : intentions;
+        }
+
+        public Profile(String version, Integer graduationYear, List<String> acceptedCities,
+                       List<Fact> facts, String approvedResumeAssetId, boolean autoResume,
+                       boolean autoLocation, boolean enabled, Resume resume, String approvedPdfAssetId,
+                       String resumeText, String resumeTextHash, String approvedResumeTextHash,
+                       List<String> derivedFactIds, boolean autoReply, FollowUp followUp) {
+            this(version, graduationYear, acceptedCities, facts, approvedResumeAssetId, autoResume,
+                    autoLocation, enabled, resume, approvedPdfAssetId, resumeText, resumeTextHash,
+                    approvedResumeTextHash, derivedFactIds, autoReply, followUp, "", "", JobIntentions.empty());
         }
 
         public Profile(String version, Integer graduationYear, List<String> acceptedCities,
@@ -79,7 +117,19 @@ public final class ChatContracts {
 
         public static Profile empty() {
             return new Profile("0", null, List.of(), List.of(), "", false, false, false,
-                    Resume.empty(), "", "", "", "", List.of(), false, FollowUp.defaults());
+                    Resume.empty(), "", "", "", "", List.of(), false, FollowUp.defaults(),
+                    "", "", JobIntentions.empty());
+        }
+
+        public String preferredResumeAssetId() {
+            return "PDF".equals(preferredResumeAssetKind) ? approvedPdfAssetId
+                    : "IMAGE".equals(preferredResumeAssetKind) ? approvedImageAssetId : "";
+        }
+
+        private static String normalizeResumeKind(String value) {
+            if (value == null) return "";
+            String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+            return "PDF".equals(normalized) || "IMAGE".equals(normalized) ? normalized : "";
         }
     }
     public record Message(String id, String sender, String text) {}

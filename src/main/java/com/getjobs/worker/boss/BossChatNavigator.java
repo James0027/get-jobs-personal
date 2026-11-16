@@ -33,6 +33,15 @@ final class BossChatNavigator implements AutoCloseable {
         origin.onPopup(popupListener);
     }
 
+    /** Budget was durably claimed before this method. Entry may send; never follow it with text. */
+    Chat openControlled(Locator button, com.getjobs.worker.boss.controlled.ControlledTarget target,
+            com.getjobs.worker.boss.controlled.ControlledTarget.Permit permit, BossExecutionGuard guard,
+            Runnable revalidate, long timeoutMs) {
+        revalidate.run();
+        guard.assertControlledAction(permit,target,com.getjobs.worker.boss.controlled.ControlledTarget.Action.ENTRY);
+        return open(button,false,false,null,timeoutMs);
+    }
+
     Chat open(Locator button, boolean repeat, boolean allowRepeat, Supplier<Boolean> stop, long timeoutMs) {
         if (stop != null && Boolean.TRUE.equals(stop.get())) return null;
         if (repeat && !allowRepeat) return null;

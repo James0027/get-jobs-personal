@@ -176,13 +176,13 @@ public class ZhilianController {
             Map<String, Object> data = new HashMap<>();
             if (cookie != null) {
                 data.put("platform", cookie.getPlatform());
-                data.put("cookie_value", cookie.getCookieValue());
+                data.put("configured", cookie.getCookieValue() != null && !cookie.getCookieValue().isBlank());
                 data.put("remark", cookie.getRemark());
                 data.put("created_at", cookie.getCreatedAt());
                 data.put("updated_at", cookie.getUpdatedAt());
             } else {
                 data.put("platform", "zhilian");
-                data.put("cookie_value", null);
+                data.put("configured", false);
                 data.put("message", "未找到智联招聘Cookie记录");
             }
             response.put("success", true);

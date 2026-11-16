@@ -6,12 +6,14 @@ import { createSSEWithBackoff } from '@/lib/sse'
 import { createPortal } from 'react-dom'
 import { BiBriefcase, BiSave, BiSearch, BiMap, BiMoney, BiBuilding, BiTime, BiBarChart, BiTrash, BiPlus, BiPlay, BiStop, BiLogOut, BiImage, BiUpload, BiZoomIn, BiX } from 'react-icons/bi'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTemplatePanel from '@/app/components/PlatformTemplatePanel'
+import LoginBrowserButton from '@/app/components/LoginBrowserButton'
 import AnalysisContent from '@/app/boss/analysis/AnalysisContent'
 import { API_BASE } from '@/lib/api'
 import IndustryPicker, { IndustryGroup } from './components/IndustryPicker'
@@ -25,7 +27,6 @@ interface BossConfig {
   cityCode?: string
   targetCount?: number
   graduationYear?: number
-  aiOnly?: number
   acceptedCities?: string
   approvedResume?: number
   autoResume?: number
@@ -102,13 +103,13 @@ interface BossProfile {
   autoResume?: boolean
   autoLocation?: boolean
   enabled?: boolean
-  resume?: any
+  resume?: Record<string, unknown>
   resumeText?: string
   resumeTextHash?: string
   approvedResumeTextHash?: string
   derivedFactIds?: string[]
   autoReply?: boolean
-  followUp?: any
+  followUp?: Record<string, unknown>
 }
 
 export default function BossPage() {
@@ -116,7 +117,6 @@ export default function BossPage() {
     keywords: '',
     cityCode: '',
     targetCount: 50,
-    aiOnly: 1,
     industry: '',
     jobType: '',
     experience: '',
@@ -309,7 +309,6 @@ export default function BossPage() {
           repeatChatMessages: data.config.repeatChatMessages ?? '',
           cityCode: data.config.cityCode || '',
           targetCount: data.config.targetCount ?? 50,
-          aiOnly: data.config.aiOnly ?? 1,
           jobType: normalizeJobType(data.config.jobType),
           // 没有图片时不能保留开启状态，否则开关会处于“开启但不可用”。
           sendImgResume: fetchedResumeImage.exists ? (data.config.sendImgResume ?? 0) : 0,
@@ -968,25 +967,16 @@ export default function BossPage() {
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
         title="Boss直聘配置"
-        subtitle="配置Boss直聘平台的求职参数"
-        iconClass="text-white"
-        accentBgClass="bg-teal-500"
         actions={
-          <div className="flex items-center gap-2">
-            {checkingLogin ? (
-              <Button size="sm" disabled className="rounded-full bg-gray-300 text-gray-600 cursor-not-allowed px-4 shadow">
-                <BiPlay className="mr-1" /> 检查登录中...
-              </Button>
-            ) : !isLoggedIn ? (
-              <Button size="sm" disabled className="rounded-full bg-gray-300 text-gray-600 cursor-not-allowed px-4 shadow">
-                <BiPlay className="mr-1" /> 请先登录Boss
-              </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isLoggedIn ? (
+              <LoginBrowserButton platform="boss" />
             ) : isDelivering ? (
-              <Button onClick={handleStopDelivery} size="sm" className="rounded-full bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <Button onClick={handleStopDelivery} size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
                 <BiStop className="mr-1" /> 停止投递
               </Button>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   onClick={handleResumeDelivery}
                   disabled={hasUnknown || !canResume || dirty}
@@ -997,10 +987,9 @@ export default function BossPage() {
                       ? '配置有未保存修改，请先保存'
                       : !canResume
                       ? '暂无可继续的未完成任务'
-                      : '继续当前任务剩余额度（注意：如变更了任何配置项，需点击右侧新建任务）'
+                      : '继续当前任务剩余额度'
                   }
                   size="sm"
-                  className={`rounded-full px-4 shadow-lg transition-all duration-300 ${hasUnknown || !canResume || dirty ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white hover:shadow-xl hover:scale-105'}`}
                 >
                   <BiPlay className="mr-1" /> 继续任务
                 </Button>
@@ -1010,28 +999,29 @@ export default function BossPage() {
                     setShowNewTaskDialog(true)
                   }}
                   disabled={hasUnknown || dirty}
-                  title={
-                    hasUnknown
-                      ? '存在未核实发送状态，请先核对'
-                      : dirty
-                      ? '请先保存当前配置再新建任务'
-                      : '创建独立新任务，保留旧历史'
-                  }
+                  title={hasUnknown ? '存在未核实发送状态，请先核对' : dirty ? '请先保存当前配置再新建任务' : '创建独立新任务，保留旧历史'}
                   size="sm"
-                  className={`rounded-full px-4 shadow-lg transition-all duration-300 ${hasUnknown || dirty ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white hover:shadow-xl hover:scale-105'}`}
+                  variant="outline"
                 >
                   <BiPlus className="mr-1" /> 新建任务
                 </Button>
               </div>
             )}
-            <Button onClick={() => setShowLogoutDialog(true)} size="sm" className="rounded-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-              <BiLogOut className="mr-1" /> 退出登录
-            </Button>
-            <Button onClick={() => handleSave(false)} size="sm" className="rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            <Button onClick={() => handleSave(false)} size="sm" variant="outline">
               <BiSave className="mr-1" /> 保存配置
+            </Button>
+            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10">
+              <BiLogOut className="mr-1" /> 退出登录
             </Button>
           </div>
         }
+      />
+
+      <PlatformTemplatePanel
+        platform="BOSS"
+        loginState={checkingLogin ? 'checking' : isLoggedIn ? 'logged_in' : 'not_logged_in'}
+        taskState={isDelivering ? '任务进行中' : '未运行'}
+        onApplied={() => void fetchAllData()}
       />
 
       <Tabs defaultValue="config" className="w-full">
@@ -1042,13 +1032,9 @@ export default function BossPage() {
 
         <TabsContent value="config" className="space-y-6 mt-6" onChange={() => setDirty(true)}>
           <Card>
-            <CardHeader><CardTitle>本次投递目标</CardTitle><CardDescription>按首次招呼确认发送成功的岗位计数；多城市平均分配，不足时补投。</CardDescription></CardHeader>
+            <CardHeader><CardTitle>本次投递目标</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.aiOnly === 1} onChange={e => setConfig({ ...config, aiOnly: e.target.checked ? 1 : 0 })} />仅保留 AI 相关岗位</label>
-                <span className="text-xs text-muted-foreground">目标份数在「新建任务」弹窗内设置，此处只读展示进度。</span>
-              </div>
-              <p className="text-xs text-muted-foreground">“经验不限”不代表校招。毕业年份在页面前部「搜索与匹配配置」设置；届别明确不符时跳过，信息不明时进入待确认。</p>
+              <p className="text-sm text-muted-foreground">按关键词和 BOSS 搜索条件选择岗位，不额外要求 AI 字样或毕业届别。首次招呼发送成功即计为投递成功。</p>
               {delivery && <div aria-live="polite" className="space-y-3 rounded-xl border bg-muted/20 p-4">
                 <div className="flex justify-between items-center gap-3">
                   <span className="font-medium">
@@ -1079,23 +1065,6 @@ export default function BossPage() {
               </div>}
             </CardContent>
           </Card>
-          {/* 平台说明 */}
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                Boss直聘平台说明
-              </CardTitle>
-              <CardDescription>登录与投递操作提示</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 Boss 直聘平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* 投递行为 */}
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -1104,7 +1073,7 @@ export default function BossPage() {
                 <BiImage className="text-primary" />
                 投递行为
               </CardTitle>
-              <CardDescription>设置重复沟通与图片简历发送行为，保存后在下次启动投递时生效</CardDescription>
+
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -1137,7 +1106,6 @@ export default function BossPage() {
                     placeholder="每行填写一条想发送的消息"
                     className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <p className="text-sm text-muted-foreground">可自由编辑、添加或删除。每次从非空行中随机选一条，可能重复；全部清空时跳过重复沟通。点击“保存配置”后，下次启动投递生效。</p>
                 </div>
                 <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_220px]">
                   <div className="space-y-3">
@@ -1205,9 +1173,6 @@ export default function BossPage() {
                     <Label htmlFor="sendImgResume" className="text-base font-medium">
                       自动发送图片简历
                     </Label>
-                    <p className="text-sm text-muted-foreground">
-                      开启后，系统会在打招呼语发送成功后发送上方图片；上传图片不会自动开启。
-                    </p>
                     {!resumeImage.exists && (
                       <p className="text-xs text-amber-600">请先上传图片简历，再开启此选项。</p>
                     )}
@@ -1243,7 +1208,7 @@ export default function BossPage() {
                 <BiSearch className="text-primary" />
                 搜索配置
               </CardTitle>
-              <CardDescription>设置职位搜索关键词和目标城市</CardDescription>
+
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1255,7 +1220,6 @@ export default function BossPage() {
                     onChange={(e) => setKeywordsDisplay(e.target.value)}
                     placeholder="例如：Java开发工程师"
                   />
-                  <p className="text-xs text-muted-foreground">职位搜索的关键词</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1275,11 +1239,11 @@ export default function BossPage() {
                     min={2000}
                     max={2100}
                     step={1}
-                    placeholder="如 2027；留空表示不限定"
+                    placeholder="如 2027"
                     value={graduationYear}
                     onChange={(e) => { setGraduationYear(e.target.value); setDirty(true) }}
                   />
-                  <p className="text-xs text-muted-foreground">仅用于校招届别判定，不会由工作经验推导，也与教育背景时间无关。</p>
+                  <p className="text-xs text-muted-foreground">用于个人资料和沟通内容，不额外限制搜索结果。</p>
                 </div>
 
               <div className="space-y-2">
@@ -1295,7 +1259,6 @@ export default function BossPage() {
                     </option>
                   ))}
                 </Select>
-                <p className="text-xs text-muted-foreground">选择职位类型</p>
               </div>
 
               <div className="space-y-2 md:col-span-3">
@@ -1314,7 +1277,6 @@ export default function BossPage() {
                   <option value="0">关闭</option>
                   <option value="1">开启</option>
                 </Select>
-                <p className="text-xs text-muted-foreground">开启后将过滤活跃状态包含“年”的HR，但仍保存数据。</p>
               </div>
               </div>
             </CardContent>
@@ -1329,7 +1291,7 @@ export default function BossPage() {
               <BiMoney className="text-primary" />
               薪资与经验要求
             </CardTitle>
-            <CardDescription>设置薪资待遇和工作经验要求</CardDescription>
+
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1341,7 +1303,6 @@ export default function BossPage() {
                   onChange={setSelectedSalary}
                   placeholder="选择薪资待遇"
                 />
-                <p className="text-xs text-muted-foreground">可多选</p>
               </div>
               <div className="space-y-2">
                 <Label>工作经验</Label>
@@ -1363,7 +1324,7 @@ export default function BossPage() {
               <BiBuilding className="text-primary" />
               公司要求
             </CardTitle>
-            <CardDescription>设置目标公司的规模和融资阶段</CardDescription>
+
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1404,7 +1365,7 @@ export default function BossPage() {
         <Card>
           <CardHeader>
             <CardTitle>匹配问候与说明</CardTitle>
-            <CardDescription>首次招呼语；开启匹配说明后，首次招呼成功会追加 ≤60 字匹配理由</CardDescription>
+
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -1430,7 +1391,7 @@ export default function BossPage() {
         <Card>
           <CardHeader>
             <CardTitle>简历资料</CardTitle>
-            <CardDescription>图片简历沿用现有语义；PDF 为本地资产，真实发送待平台证据</CardDescription>
+
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-2 rounded-lg border p-4">
@@ -1438,7 +1399,6 @@ export default function BossPage() {
                 <span className="text-sm font-medium">图片简历</span>
                 <span className="text-xs text-muted-foreground">{resumeImage.exists ? '已上传' : '未上传'}</span>
               </div>
-              <p className="text-xs text-muted-foreground">沿用原有图片上传与批准逻辑；仅在已批准且开关开启时用于首次问候附图。</p>
               <Button variant="outline" size="sm" onClick={() => resumeImageInputRef.current?.click()}>上传/替换图片</Button>
             </div>
 
@@ -1492,7 +1452,7 @@ export default function BossPage() {
               <BiSearch className="text-primary" />
               黑名单管理 ({blacklist.length} 条)
             </CardTitle>
-            <CardDescription>添加或删除不想投递的公司、职位或HR</CardDescription>
+
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
@@ -1625,7 +1585,7 @@ export default function BossPage() {
           </CardContent>
         </Card>
 
-        
+
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6 mt-6">
@@ -1647,7 +1607,7 @@ export default function BossPage() {
           <button
             type="button"
             onClick={() => setShowResumePreview(false)}
-            className="fixed right-4 top-4 z-[101] inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-white text-3xl text-gray-900 shadow-[0_4px_20px_rgba(0,0,0,0.65)] transition duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:scale-105 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70 sm:right-6 sm:top-6"
+            className="fixed right-4 top-4 z-[101] inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-white bg-white text-3xl text-gray-900 shadow-sm transition duration-200 hover:border-red-500 hover:bg-red-500 hover:text-white hover:scale-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/70 sm:right-6 sm:top-6"
             aria-label="关闭大图预览"
             title="关闭（Esc）"
           >
@@ -1661,7 +1621,7 @@ export default function BossPage() {
               height={2000}
               unoptimized
               priority
-              className="h-auto w-[94vw] max-w-[1200px] rounded-md bg-white shadow-2xl"
+              className="h-auto w-[94vw] max-w-[1200px] rounded-md bg-white shadow-sm"
               onMouseDown={(event) => event.stopPropagation()}
             />
           </div>
@@ -1673,7 +1633,7 @@ export default function BossPage() {
       {/* 退出确认弹框 */}
       {showLogoutDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in">
             <Card className="border-0">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1696,7 +1656,7 @@ export default function BossPage() {
                       await triggerLogout()
                       setShowLogoutDialog(false)
                     }}
-                    className="rounded-full bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-4"
+                    className="rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 px-4"
                   >
                     确认退出
                   </Button>
@@ -1710,7 +1670,7 @@ export default function BossPage() {
       {/* 退出登录结果弹框 */}
       {showLogoutResultDialog && logoutResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-modal="true">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in">
             <Card className="border-0">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1723,7 +1683,7 @@ export default function BossPage() {
                 <div className="flex justify-end gap-2">
                   <Button
                     onClick={() => setShowLogoutResultDialog(false)}
-                    className={`rounded-full px-4 ${logoutResult.success ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white'}`}
+                    className={`rounded-full px-4 ${logoutResult.success ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}`}
                   >
                     知道了
                   </Button>
@@ -1737,7 +1697,7 @@ export default function BossPage() {
       {/* 保存结果弹框 */}
       {showSaveDialog && saveResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-modal="true">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in-95">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in">
             <Card className="border-0">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1750,7 +1710,7 @@ export default function BossPage() {
                 <div className="flex justify-end gap-2">
                   <Button
                     onClick={() => setShowSaveDialog(false)}
-                    className={`rounded-full px-4 ${saveResult.success ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white'}`}
+                    className={`rounded-full px-4 ${saveResult.success ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'}`}
                   >
                     知道了
                   </Button>
@@ -1764,10 +1724,9 @@ export default function BossPage() {
       {/* 新建任务弹窗 */}
       {showNewTaskDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in-95 p-6 space-y-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in p-6 space-y-4">
             <div className="space-y-1">
               <h3 className="text-lg font-semibold">新建投递任务</h3>
-              <p className="text-xs text-muted-foreground">创建独立新任务，按所设目标份数开始投递</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="dialogTargetCount">目标份数</Label>
@@ -1781,7 +1740,6 @@ export default function BossPage() {
                 onChange={(e) => setNewTaskTargetCount(Number(e.target.value))}
                 placeholder="1-10000 整数"
               />
-              <p className="text-xs text-muted-foreground">请输入 1 至 10000 的整数目标</p>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
@@ -1796,7 +1754,7 @@ export default function BossPage() {
                   setShowNewTaskDialog(false)
                   await handleStartNewDelivery(newTaskTargetCount)
                 }}
-                className="rounded-full bg-gradient-to-r from-teal-500 to-green-600 hover:from-teal-600 hover:to-green-700 text-white px-4"
+                className="rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-4"
               >
                 创建并开始
               </Button>
@@ -1823,16 +1781,10 @@ function MultiSelect({
   onClose?: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
-
-  // 确保组件已挂载（解决 SSR 问题）
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // 计算下拉框位置
   const updatePosition = useCallback(() => {
@@ -1941,7 +1893,7 @@ function MultiSelect({
         </span>
         <span className={`ml-2 text-xs text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
-      {open && mounted && createPortal(
+      {open && createPortal(
         <div
           ref={dropdownRef}
           className="dropdown-panel p-2"
@@ -1957,7 +1909,7 @@ function MultiSelect({
               return (
                 <div
                   key={opt.id}
-                  className={`group inline-flex items-center justify-between gap-3 rounded-full px-3 py-2 cursor-pointer transition-all border ${checked ? 'border-teal-300/60 bg-gradient-to-r from-teal-500/12 to-cyan-500/12 text-teal-900 dark:text-teal-200 shadow' : 'border-white/20 bg-white/8 text-foreground hover:bg-white/12'}`}
+                  className={`group inline-flex items-center justify-between gap-3 rounded-full px-3 py-2 cursor-pointer transition-all border ${checked ? 'border-primary/40 bg-primary/10 text-primary' : 'border-white/20 bg-white/8 text-foreground hover:bg-white/12'}`}
                   onClick={(e) => {
                     console.log('[MultiSelect] div 被点击', {
                       optionCode: opt.code,

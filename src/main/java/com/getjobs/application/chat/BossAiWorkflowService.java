@@ -59,10 +59,6 @@ public class BossAiWorkflowService {
         return guard;
     }
 
-    public Integer getApprovedGraduationYear() {
-        return store.profile().graduationYear();
-    }
-
     public Profile effectiveProfile(Profile p) {
         if (configService == null) return p;
         try {
@@ -88,7 +84,7 @@ public class BossAiWorkflowService {
             return new Profile(p.version(), p.graduationYear(), mapped, p.facts(), p.approvedResumeAssetId(),
                     p.autoResume(), p.autoLocation(), p.enabled(), p.resume(), p.approvedPdfAssetId(),
                     p.resumeText(), p.resumeTextHash(), p.approvedResumeTextHash(), p.derivedFactIds(),
-                    p.autoReply(), p.followUp());
+                    p.autoReply(), p.followUp(), p.approvedImageAssetId(), p.preferredResumeAssetKind(), p.intentions());
         } catch (Exception ignored) {
             return p;
         }
@@ -306,7 +302,11 @@ public class BossAiWorkflowService {
         var facts = new ArrayList<>(p.facts());
         if (p.graduationYear() != null) facts.add(new Fact("graduationYear", "毕业届别：" + p.graduationYear() + "届"));
         p.acceptedCities().forEach(city -> facts.add(new Fact("location:" + city, "接受在" + city + "工作")));
-        Profile effective = new Profile(p.version(), p.graduationYear(), p.acceptedCities(), facts, p.approvedResumeAssetId(), p.autoResume(), p.autoLocation(), p.enabled());
+        Profile effective = new Profile(p.version(), p.graduationYear(), p.acceptedCities(), facts,
+                p.approvedResumeAssetId(), p.autoResume(), p.autoLocation(), p.enabled(), p.resume(),
+                p.approvedPdfAssetId(), p.resumeText(), p.resumeTextHash(), p.approvedResumeTextHash(),
+                p.derivedFactIds(), p.autoReply(), p.followUp(), p.approvedImageAssetId(),
+                p.preferredResumeAssetKind(), p.intentions());
         input.put("profileVersion", p.version());
         input.put("profile", effective);
         input.put("job", job);

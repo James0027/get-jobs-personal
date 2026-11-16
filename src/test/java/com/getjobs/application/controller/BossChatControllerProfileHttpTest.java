@@ -3,6 +3,7 @@ package com.getjobs.application.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.getjobs.application.chat.*;
 import com.getjobs.application.service.BossResumeDocumentService;
+import com.getjobs.application.service.BossResumeImageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,8 @@ class BossChatControllerProfileHttpTest {
         BossChatMonitor monitor = mock(BossChatMonitor.class);
         BossChatBrowserGateway browser = mock(BossChatBrowserGateway.class);
 
-        BossChatController controller = new BossChatController(store, workflow, monitor, browser, documents);
+        BossResumeImageService images = new BossResumeImageService(tempDir.toString());
+        BossChatController controller = new BossChatController(store, workflow, monitor, browser, documents, images);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

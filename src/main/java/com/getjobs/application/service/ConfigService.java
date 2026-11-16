@@ -206,7 +206,7 @@ public class ConfigService {
         int result = configMapper.insert(config);
 
         if (result > 0) {
-            log.info("创建配置成功: {} = {}", config.getConfigKey(), config.getConfigValue());
+            log.info("创建配置成功: {}", config.getConfigKey());
             return true;
         }
 

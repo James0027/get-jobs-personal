@@ -17,12 +17,20 @@ public final class DeliveryRun {
     private long version;
     private Map<String,Object> pendingAction = Map.of();
     private String configFingerprint;
+    private Map<String,Object> auditContext = Map.of();
+    private static final Set<String> AUDIT_FIELDS = Set.of("schemaVersion","profileVersion","templateId","templateVersion","platformId",
+            "resolvedCriteria","selectedAssetIds","createdAt","criteriaSource","templateApplicationSupported","unappliedTemplateFields",
+            "missingCriteriaFields","profileExecutionFrozen","assetExecutionFrozen","assetAvailability","auditSnapshotStatus","assetIdsSource");
 
     public DeliveryRun(int target, List<String> cities, Consumer<Map<String, Object>> persistence) {
         this(target,cities,persistence,"");
     }
     public DeliveryRun(int target, List<String> cities, Consumer<Map<String, Object>> persistence, String configFingerprint) {
+        this(target,cities,persistence,configFingerprint,Map.of());
+    }
+    public DeliveryRun(int target, List<String> cities, Consumer<Map<String, Object>> persistence, String configFingerprint, Map<String,Object> auditContext) {
         this.configFingerprint = configFingerprint;
+        this.auditContext = freezeAudit(auditContext);
         if (target < 1 || target > 10000) throw new IllegalArgumentException("目标数量必须为1至10000");
         targetCount = target;
         var unique = cities == null ? List.<String>of() : cities.stream().filter(Objects::nonNull).map(String::trim).distinct().toList();
@@ -72,6 +80,8 @@ public final class DeliveryRun {
         result.put("currentCity", currentCity); result.put("state", state);
         result.put("version", version); result.put("pendingAction", pendingAction);
         result.put("configFingerprint", configFingerprint);
+        if(auditContext.isEmpty())result.put("auditSnapshotStatus","LEGACY_MISSING");
+        else result.putAll(auditContext);
         result.put("cityQuotas", new LinkedHashMap<>(cityQuotas)); result.put("citySuccess", new LinkedHashMap<>(citySuccess));
         result.put("attemptedJobIds", List.copyOf(attempted)); result.put("confirmedJobIds", List.copyOf(confirmed));
         return result;
@@ -93,10 +103,21 @@ public final class DeliveryRun {
         run.version=((Number)saved.getOrDefault("version",0)).longValue();
         run.currentCity=(String)saved.getOrDefault("currentCity","");
         run.configFingerprint=(String)saved.getOrDefault("configFingerprint","");
+        run.auditContext=freezeAudit(saved);
         // Persist only after all restored fields are installed.
         run.persistence=persistence == null ? ignored -> {} : persistence;
         run.changed();
         return run;
     }
     private void changed() { version++; persistence.accept(snapshot()); }
+    private static Map<String,Object> freezeAudit(Map<String,Object> values){
+        Map<String,Object> result=new LinkedHashMap<>();
+        values.forEach((k,v)->{if(AUDIT_FIELDS.contains(k))result.put(k,freeze(v));});
+        return Collections.unmodifiableMap(result);
+    }
+    private static Object freeze(Object value){
+        if(value instanceof Map<?,?> map){Map<String,Object> copy=new LinkedHashMap<>();map.forEach((k,v)->copy.put((String)k,freeze(v)));return Collections.unmodifiableMap(copy);}
+        if(value instanceof List<?> list)return list.stream().map(DeliveryRun::freeze).toList();
+        return value;
+    }
 }

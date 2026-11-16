@@ -116,17 +116,28 @@ public class BossResumeDocumentService {
         return getCurrentDocument()
                 .map(info -> Map.<String, Object>of(
                         "exists", true,
+                        "assetId", info.assetId(),
+                        "kind", "PDF",
+                        "available", true,
                         "fileName", info.fileName(),
+                        "contentType", "application/pdf",
                         "size", info.size(),
                         "updatedAt", info.updatedAt(),
-                        "assetId", info.assetId(),
                         "previewUrl", PREVIEW_URL
                 ))
                 .orElseGet(() -> Map.of(
                         "exists", false,
                         "assetId", "",
+                        "kind", "PDF",
+                        "available", false,
                         "previewUrl", PREVIEW_URL
                 ));
+    }
+
+    public synchronized boolean deleteCurrentDocument() throws IOException {
+        boolean deleted = Files.deleteIfExists(documentPath);
+        if (deleted) deleteOtherPdfs(documentPath);
+        return deleted;
     }
 
     private void validatePdfContent(Path path, long size) throws IOException {

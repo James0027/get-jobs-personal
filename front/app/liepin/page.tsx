@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react'
 import { createSSEWithBackoff } from '@/lib/sse'
 import { BiSearch, BiSave, BiTargetLock, BiMap, BiMoney, BiTime, BiBookmark, BiBarChart, BiPlay, BiStop, BiLogOut, BiBriefcase } from 'react-icons/bi'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/liepin/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTemplatePanel from '@/app/components/PlatformTemplatePanel'
+import LoginBrowserButton from '@/app/components/LoginBrowserButton'
 import { API_BASE } from '@/lib/api'
 
 interface LiepinConfig {
@@ -267,36 +269,34 @@ export default function LiepinPage() {
       <PageHeader
         icon={<BiSearch className="text-2xl" />}
         title="猎聘配置"
-        subtitle="配置猎聘平台的求职参数"
-        iconClass="text-foreground"
-        accentBgClass="bg-muted"
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            {checkingLogin ? (
-              <Button size="sm" disabled variant="outline">
-                <BiPlay className="mr-1" /> 检查登录中...
-              </Button>
-            ) : !isLoggedIn ? (
-              <Button size="sm" disabled variant="outline">
-                <BiPlay className="mr-1" /> 请先登录猎聘
-              </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isLoggedIn ? (
+              <LoginBrowserButton platform="liepin" />
             ) : isDelivering ? (
-              <Button onClick={handleStopDelivery} size="sm" variant="destructive">
+              <Button onClick={handleStopDelivery} size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
                 <BiStop className="mr-1" /> 停止投递
               </Button>
             ) : (
-              <Button onClick={handleStartDelivery} size="sm" variant="default">
+              <Button onClick={handleStartDelivery} size="sm">
                 <BiPlay className="mr-1" /> 开始投递
               </Button>
             )}
-            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="outline">
-              <BiLogOut className="mr-1" /> 退出登录
-            </Button>
-            <Button onClick={handleSave} size="sm" variant="default">
+            <Button onClick={handleSave} size="sm" variant="outline">
               <BiSave className="mr-1" /> 保存配置
+            </Button>
+            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10">
+              <BiLogOut className="mr-1" /> 退出登录
             </Button>
           </div>
         }
+      />
+
+      <PlatformTemplatePanel
+        platform="LIEPIN"
+        loginState={checkingLogin ? 'checking' : isLoggedIn ? 'logged_in' : 'not_logged_in'}
+        taskState={isDelivering ? '任务进行中' : '未运行'}
+        onApplied={() => void fetchAllData()}
       />
 
       <Tabs defaultValue="config" className="w-full">
@@ -306,23 +306,6 @@ export default function LiepinPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-        {/* 平台说明 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BiBriefcase className="text-muted-foreground" />
-              猎聘平台说明
-            </CardTitle>
-            <CardDescription>登录与投递操作提示</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 猎聘 平台，登录成功后系统会自动检测登录状态。</p>
-              <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-              <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* 搜索配置 */}
         <Card>
@@ -331,7 +314,7 @@ export default function LiepinPage() {
               <BiSearch className="text-muted-foreground" />
               搜索配置
             </CardTitle>
-            <CardDescription>设置职位搜索关键词和筛选条件</CardDescription>
+
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -343,7 +326,6 @@ export default function LiepinPage() {
                   onChange={(e) => setConfig({ ...config, keywords: e.target.value })}
                   placeholder="例如：大模型, Python, Golang"
                 />
-                <p className="text-xs text-muted-foreground">关键词可多选，使用英文逗号分隔，例如：大模型, Python, Golang</p>
               </div>
 
               <div className="space-y-2">
@@ -384,9 +366,6 @@ export default function LiepinPage() {
                     ))}
                   </Select>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  {isCustomCity ? '手动输入城市码（例如：410代表北京）' : '从列表选择城市，或点击"手动输入"自定义'}
-                </p>
               </div>
             </div>
           </CardContent>
@@ -399,7 +378,7 @@ export default function LiepinPage() {
               <BiMoney className="text-muted-foreground" />
               薪资筛选
             </CardTitle>
-            <CardDescription>设置期望薪资范围</CardDescription>
+
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-6">
@@ -411,7 +390,6 @@ export default function LiepinPage() {
                   onChange={(e) => setConfig({ ...config, salaryCode: e.target.value })}
                   placeholder="例如：15$30"
                 />
-                <p className="text-xs text-muted-foreground">薪资范围码（例如：15$30表示15k-30k）</p>
               </div>
             </div>
           </CardContent>

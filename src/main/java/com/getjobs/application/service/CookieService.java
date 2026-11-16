@@ -25,6 +25,25 @@ public class CookieService {
     private final JdbcTemplate jdbcTemplate;
 
     /**
+     * BOSS-only execution owns the browser profile; application-level cookie rows must
+     * never be written or cleared while that mode is active. The lock is sticky for the
+     * process lifetime, matching the manager's sticky BOSS-only mode.
+     */
+    private volatile boolean mutationsLocked;
+
+    public void lockCookieMutations() {
+        mutationsLocked = true;
+    }
+
+    public boolean isCookieMutationsLocked() {
+        return mutationsLocked;
+    }
+
+    private void assertMutationsAllowed() {
+        if (mutationsLocked) throw new IllegalStateException("BOSS_ONLY_COOKIE_DB_DISABLED");
+    }
+
+    /**
      * 确保 cookie 表存在。
      * <p>
      * 曾有一个版本把 Cookie 改为存放在 cookies/&lt;platform&gt;.json，迁移完成后执行了
@@ -72,6 +91,7 @@ public class CookieService {
      * @return 是否成功
      */
     public boolean saveOrUpdateCookie(String platform, String cookieValue, String remark) {
+        assertMutationsAllowed();
         CookieEntity existingCookie = getCookieByPlatform(platform);
 
         if (existingCookie != null) {
@@ -99,6 +119,7 @@ public class CookieService {
      * @return 影响行数是否大于0
      */
     public boolean clearCookieByPlatform(String platform, String remark) {
+        assertMutationsAllowed();
         UpdateWrapper<CookieEntity> updateWrapper = new UpdateWrapper<>();
         updateWrapper.eq("platform", platform)
                 .set("cookie_value", "")
@@ -113,6 +134,7 @@ public class CookieService {
      * @return 是否成功
      */
     public boolean deleteCookie(String platform) {
+        assertMutationsAllowed();
         LambdaQueryWrapper<CookieEntity> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(CookieEntity::getPlatform, platform);
         return cookieMapper.delete(wrapper) > 0;

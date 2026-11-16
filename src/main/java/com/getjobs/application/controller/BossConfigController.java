@@ -276,12 +276,30 @@ public class BossConfigController {
         }
     }
 
+    /** 获取 Boss 图片简历元信息。 */
+    @GetMapping("/resume-image")
+    public Map<String, Object> getResumeImageMetadata() {
+        return bossResumeImageService.getMetadata();
+    }
+
     /** 返回图片内容供管理页面预览。 */
     @GetMapping("/resume-image/content")
     public ResponseEntity<Resource> getResumeImageContent() {
         return bossResumeImageService.getCurrentImage()
                 .map(this::resumeImageResponse)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** 删除当前图片简历。 */
+    @DeleteMapping("/resume-image")
+    public Map<String, Object> deleteResumeImage() {
+        return Map.of("success", true, "deleted", bossResumeImageService.deleteCurrentImage());
+    }
+
+    /** 统一列出 PDF/图片简历资产元数据；不返回服务器路径。 */
+    @GetMapping("/resume-assets")
+    public List<Map<String, Object>> getResumeAssets() {
+        return List.of(bossResumeDocumentService.getMetadata(), bossResumeImageService.getMetadata());
     }
 
     /** 获取 Boss PDF 简历元信息。 */
@@ -319,6 +337,16 @@ public class BossConfigController {
         return bossResumeDocumentService.getCurrentDocument()
                 .map(this::resumeDocumentResponse)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** 删除当前 PDF 简历。 */
+    @DeleteMapping("/resume-document")
+    public ResponseEntity<Map<String, Object>> deleteResumeDocument() {
+        try {
+            return ResponseEntity.ok(Map.of("success", true, "deleted", bossResumeDocumentService.deleteCurrentDocument()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("success", false, "message", "PDF 简历删除失败"));
+        }
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

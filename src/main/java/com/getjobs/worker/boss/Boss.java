@@ -58,19 +58,6 @@ public class Boss {
     private Set<String> blackRecruiters;
     private Set<String> blackJobs;
 
-    /**
-     * AI 岗位词根白名单：岗位名或 JD 命中其中任意一个才会投递。
-     * 用于把"AI 产品"搜索里偶尔带出来的传统产品岗挡掉；改成空数组即关闭该过滤。
-     */
-    private static final String[] AI_JOB_TERMS = {
-            "人工智能", "大模型", "大语言模型", "llm", "aigc", "agent", "智能体", "gpt",
-            "机器学习", "深度学习", "多模态", "nlp", "生成式", "chatbot", "rag",
-            "genai", "generative", "machine learning", "deep learning",
-            "计算机视觉", "语音识别", "对话系统"
-    };
-    /** "ai" 单独判定，避免命中 email / detail / explain 这类单词 */
-    private static final java.util.regex.Pattern AI_WORD =
-            java.util.regex.Pattern.compile("(?i)(?<![a-z])ai(?![a-z])");
     // 记录 encryptId -> encryptUserId 的映射，用于后续更新投递状态
     private final ConcurrentMap<String, String> encryptIdToUserId = new ConcurrentHashMap<>();
     @Setter
@@ -394,7 +381,9 @@ public class Boss {
                             } catch (Throwable ignore) { return false; }
                         }, cardToClick::click);
                     }
-                } catch (Throwable ignore) {
+                } catch (Throwable error) {
+                    log.warn("岗位详情响应未捕获 | 关键词：{} | 卡片序号：{} | 错误类型：{}",
+                            keyword, i, error.getClass().getSimpleName());
                 }
                 PlaywrightUtil.sleep(1);
 
@@ -457,12 +446,16 @@ public class Boss {
                             bossCompany = brand.optString("brandName", "");
                         }
                     } catch (Throwable e) {
-                        log.debug("点击卡片后解析岗位详情用于过滤失败：{}", e.getMessage());
+                        log.warn("岗位详情解析失败 | 关键词：{} | 卡片序号：{} | 错误类型：{}",
+                                keyword, i, e.getClass().getSimpleName());
                     }
                 }
 
                 // 过滤（全部基于 JSON 字段），并输出过滤原因
                 if (jobName == null || jobName.isBlank() || jobDesc == null || jobDesc.isBlank()) {
+                    log.warn("岗位详情不完整 | 关键词：{} | 卡片序号：{} | 已捕获响应：{} | 有标题：{} | 有描述：{}",
+                            keyword, i, detailResp != null,
+                            jobName != null && !jobName.isBlank(), jobDesc != null && !jobDesc.isBlank());
                     if (deliveryRun != null) deliveryRun.skipped();
                     publishDeliveryProgress("岗位详情未可靠读取，跳过而不使用旧页面信息投递");
                     continue;
@@ -492,20 +485,7 @@ public class Boss {
                     if (deliveryRun != null) deliveryRun.skipped();
                     continue;
                 }
-                // AI 岗位白名单：岗位名或 JD 必须命中 AI 词根，否则跳过，避免投到传统产品岗
-                if (!Boolean.FALSE.equals(config.getAiOnly()) && AI_JOB_TERMS.length > 0 && !isAiRelatedJob(jobName, jobDesc)) {
-                    log.info("被过滤：非AI岗位 | 公司：{} | 岗位：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
-                    if (deliveryRun != null) deliveryRun.skipped();
-                    continue;
-                }
-
-                GraduationEligibility.Decision eligible = GraduationEligibility.evaluate(aiWorkflow == null ? null : aiWorkflow.getApprovedGraduationYear(),
-                        jobName,tags,jobDesc);
-                if (eligible != GraduationEligibility.Decision.ELIGIBLE) {
-                    if (deliveryRun != null) deliveryRun.skipped();
-                    publishDeliveryProgress(eligible == GraduationEligibility.Decision.INELIGIBLE ? "毕业届别不符，跳过" : "毕业届别待确认，未发送");
-                    continue;
-                }
+                // 候选范围由关键词和 BOSS 搜索条件决定，不再按 AI 词根或毕业届别二次拦截。
 
                 // 创建Job对象（全部基于 JSON 字段）
                 Job job = new Job();
@@ -706,25 +686,6 @@ public class Boss {
         String company = parts[0];
         String job = parts.length > 1 ? parts[1] : "";
         return new String[]{company, job};
-    }
-
-    /**
-     * 判断岗位是否属于 AI 相关：岗位名或 JD 命中词根即可。
-     * JD 为空时只看岗位名。
-     */
-    private boolean isAiRelatedJob(String jobName, String jobDesc) {
-        String name = jobName == null ? "" : jobName;
-        String desc = jobDesc == null ? "" : jobDesc;
-        if (AI_WORD.matcher(name).find() || AI_WORD.matcher(desc).find()) {
-            return true;
-        }
-        String text = (name + " " + desc).toLowerCase();
-        for (String term : AI_JOB_TERMS) {
-            if (text.contains(term)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

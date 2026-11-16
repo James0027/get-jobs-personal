@@ -7,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -78,6 +79,7 @@ class FollowUpAutoRunTest {
         when(mockFollowUp.autoRun()).thenReturn(1);
 
         BossChatMonitor monitor = new BossChatMonitor(store, browser, workflow, new BossExecutionGuard(false), mockFollowUp);
+        ReflectionTestUtils.setField(monitor, "schedulingEnabled", true);
 
         // autoReply=true 触发一次 autoRun
         monitor.tick();
@@ -93,5 +95,16 @@ class FollowUpAutoRunTest {
 
         monitor.tick();
         verify(mockFollowUp, times(1)).autoRun(); // 仍为 1 次，本次未触发
+    }
+
+    @Test
+    void monitorTickDoesNotScanOrFollowUpWhenSchedulingIsDisabled() {
+        BossFollowUpService mockFollowUp = mock(BossFollowUpService.class);
+        BossChatMonitor monitor = new BossChatMonitor(store, browser, workflow, new BossExecutionGuard(false), mockFollowUp);
+        ReflectionTestUtils.setField(monitor, "schedulingEnabled", false);
+
+        monitor.tick();
+
+        verifyNoInteractions(browser, workflow, mockFollowUp);
     }
 }

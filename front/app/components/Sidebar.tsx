@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { BiEnvelope, BiBriefcase, BiSearch, BiTask, BiUserCircle, BiBrain, BiMoon, BiSun, BiX } from 'react-icons/bi'
+import { BiEnvelope, BiBriefcase, BiSearch, BiTask, BiUserCircle, BiBrain, BiMoon, BiSun, BiX, BiBookmark } from 'react-icons/bi'
 import { useTheme } from 'next-themes'
-import { API_BASE } from '@/lib/api'
+import { apiUrl } from '@/lib/api'
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -48,16 +48,15 @@ export default function Sidebar() {
     const check = async () => {
       if (checking) return
       setChecking(true)
-      const baseUrl = process.env.API_BASE_URL || `${API_BASE}`
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 3000)
       try {
         // 先尝试自定义健康接口
-        let res = await fetch(`${baseUrl}/api/health`, { signal: controller.signal })
+        let res = await fetch(apiUrl('/api/health'), { signal: controller.signal })
         if (res.status === 404) {
           // 回退到 Spring Boot Actuator
-          res = await fetch(`${baseUrl}/actuator/health`, { signal: controller.signal })
+          res = await fetch(apiUrl('/actuator/health'), { signal: controller.signal })
         }
         if (!res.ok) throw new Error(`status ${res.status}`)
         const data = await res.json()
@@ -84,6 +83,11 @@ export default function Sidebar() {
       if (interval) clearInterval(interval)
     }
   }, [])
+
+  const profileGroup = [
+    { href: '/profile', icon: BiUserCircle, label: '个人资料' },
+    { href: '/search-template', icon: BiBookmark, label: '求职模板' },
+  ]
 
   const envGroup = [
     { href: '/env-config', icon: BiEnvelope, label: '环境配置' },
@@ -182,6 +186,35 @@ export default function Sidebar() {
 
         {/* 导航菜单 */}
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {/* 求职中心分组 */}
+          <div>
+            <div className="px-3 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              求职中心
+            </div>
+            <div className="mt-1 space-y-1">
+              {profileGroup.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`
+                      flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors
+                      ${isActive
+                        ? 'bg-muted text-foreground font-semibold'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                      }
+                    `}
+                  >
+                    <Icon className="text-lg text-current" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
           {/* 环境配置分组 */}
           <div>
             <div className="px-3 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">

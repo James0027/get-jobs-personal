@@ -52,7 +52,8 @@ public class BossConfig {
     private List<String> cityCode;
     private Integer targetCount = 50;
     private Integer graduationYear;
-    private Boolean aiOnly = true;
+    /** 旧配置持久化兼容字段；投递不再使用 AI 词根筛选。 */
+    private Boolean aiOnly = false;
     private List<String> acceptedCities = List.of();
     private Boolean approvedResume = false;
     private Boolean autoResume = false;

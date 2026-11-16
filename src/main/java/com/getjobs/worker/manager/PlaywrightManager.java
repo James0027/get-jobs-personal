@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.LoginOnlyBrowserService;
+import java.util.concurrent.TimeUnit;
 import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.Cookie;
 import com.microsoft.playwright.options.WaitUntilState;
@@ -13,6 +15,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -110,8 +113,115 @@ public class PlaywrightManager {
     // Boss 登录态 Cookie：出现任意一个即视为已登录
     private static final Set<String> BOSS_LOGIN_COOKIES = Set.of("bst", "wt2", "zp_at", "geek_zp_token");
 
-    // 持久化上下文的用户数据目录，登录态直接落在这里
-    private static final Path USER_DATA_DIR = Paths.get(System.getProperty("user.dir"), "browser-data");
+    // 持久化上下文的用户数据目录，登录态直接落在这里；隔离联调时用 browser.data.dir 覆盖。
+    @Value("${browser.data.dir:}")
+    private String configuredUserDataDir;
+
+    @Value("${app.scheduling.enabled:true}")
+    private boolean schedulingEnabled;
+
+    // Sticky mode: no fallback into multi-platform initialization after handoff or failure.
+    private volatile boolean bossOnlyMode;
+    private volatile boolean bossOnlyCleanupFailed;
+    private LoginOnlyBrowserService bossProfileOwner;
+    private LoginOnlyBrowserService.BossProfileHandoff bossProfileTicket;
+
+    /**
+     * Internal service contract only. Never called with a request-supplied path or PW object.
+     * Claiming and ownership checks run on the Playwright owner thread so a concurrent
+     * close/handoff cannot interleave between the claim and its acceptance.
+     */
+    public void handoffBossOnlyReady(LoginOnlyBrowserService owner) {
+        runOnPlaywright(()->{
+            if(owner==null)throw new IllegalStateException("BOSS_HANDOFF_OWNER_INVALID");
+            // Preflight before claiming: never strand a service-side ticket on a manager
+            // that already owns a normal browser context.
+            if(!bossOnlyMode && (playwright!=null || context!=null))throw new IllegalStateException("MANAGER_ALREADY_OWNED");
+            final LoginOnlyBrowserService.BossProfileHandoff ticket;
+            try { ticket=owner.claimBossProfileForExecution().toCompletableFuture().get(10,TimeUnit.SECONDS); }
+            catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException("BOSS_HANDOFF_INTERRUPTED",e);}
+            catch(Exception e){throw new IllegalStateException("BOSS_HANDOFF_NOT_ACKNOWLEDGED",e);}
+            acceptBossOnlyTicket(owner,ticket);
+        });
+    }
+    public void ensureBossOnlyReady(LoginOnlyBrowserService owner, LoginOnlyBrowserService.BossProfileHandoff ticket) {
+        runOnPlaywright(()->acceptBossOnlyTicket(owner,ticket));
+    }
+    /**
+     * Accept a claimed ticket or release it again. A ticket is never left dangling when the
+     * manager rejects it (normal-mode ownership, foreign owner, or a newer ticket from the
+     * same owner while another ticket is still held). Launch/cleanup failures keep the fence.
+     */
+    private void acceptBossOnlyTicket(LoginOnlyBrowserService owner, LoginOnlyBrowserService.BossProfileHandoff ticket) {
+        boolean validTicket=false;
+        try {
+            if(owner==null || ticket==null || !owner.isCurrentBossHandoff(ticket))throw new IllegalStateException("BOSS_HANDOFF_TICKET_INVALID");
+            validTicket=true;
+            if(!bossOnlyMode){
+                if(playwright!=null || context!=null)throw new IllegalStateException("MANAGER_ALREADY_OWNED");
+            }else if(owner!=bossProfileOwner){
+                throw new IllegalStateException("BOSS_HANDOFF_OWNER_MISMATCH");
+            }else if(bossProfileTicket!=null && ticket!=bossProfileTicket){
+                throw new IllegalStateException("BOSS_HANDOFF_TICKET_MISMATCH");
+            }
+            bossOnlyMode=true;bossProfileOwner=owner;bossProfileTicket=ticket;
+            cookieService.lockCookieMutations();
+            initBossOnlyInternal();
+        } catch(RuntimeException | Error error) {
+            boolean adopted=bossOnlyMode && owner==bossProfileOwner && ticket==bossProfileTicket;
+            if(validTicket && !adopted && !bossOnlyCleanupFailed){
+                try { owner.releaseBossHandoff(ticket); }
+                catch(Exception releaseError){ error.addSuppressed(releaseError); }
+            }
+            throw error;
+        }
+    }
+    protected BrowserType.LaunchPersistentContextOptions bossOnlyLaunchOptions() {
+        return new BrowserType.LaunchPersistentContextOptions().setChannel("chrome").setHeadless(false)
+                .setChromiumSandbox(true).setViewportSize(null)
+                .setArgs(List.of("--no-first-run","--no-default-browser-check"));
+    }
+    protected String bossOnlyEntryUrl() { return BOSS_ENTRY_URL; }
+    private void initBossOnlyInternal() {
+        if(bossOnlyCleanupFailed || bossProfileOwner==null || !bossProfileOwner.isCurrentBossHandoff(bossProfileTicket))
+            throw new IllegalStateException("BOSS_HANDOFF_NOT_CURRENT_OR_CLEANUP_FAILED");
+        if(isInitialized())return;
+        if(playwright!=null || context!=null)cleanupBossOnly(false);
+        if(!Files.isDirectory(bossProfileTicket.profilePath())){bossOnlyCleanupFailed=true;throw new IllegalStateException("BOSS_CONFIGURED_PROFILE_MISSING");}
+        try {
+            playwright=createPlaywright();
+            context=playwright.chromium().launchPersistentContext(bossProfileTicket.profilePath(),bossOnlyLaunchOptions());
+            browserClosed=false;
+            context.onClose(closed->browserClosed=true);
+            var startupPages=new ArrayList<>(context.pages());
+            bossPage=context.newPage();bossPage.setDefaultTimeout(DEFAULT_TIMEOUT);
+            for(Page startup:startupPages)startup.close();
+            bossPage.navigate(bossOnlyEntryUrl(),new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED).setTimeout(DEFAULT_TIMEOUT));
+            // No setupPlatform, cookie DB, addCookies, monitor, login callbacks or outbound actions.
+        } catch(Exception error) {
+            try { cleanupBossOnly(false); } catch(Exception cleanup) { error.addSuppressed(cleanup); }
+            bossOnlyCleanupFailed=true;
+            throw new IllegalStateException("BOSS_ONLY_LAUNCH_FAILED_FENCE_RETAINED",error);
+        }
+    }
+    private void cleanupBossOnly(boolean release) {
+        RuntimeException failure=null;
+        try { if(context!=null)context.close(); } catch(Exception e){failure=toRuntime(e);}
+        try { if(playwright!=null)playwright.close(); } catch(Exception e){if(failure==null)failure=toRuntime(e);else failure.addSuppressed(e);}
+        context=null;playwright=null;bossPage=null;browserClosed=true;loginStatus.clear();
+        if(failure!=null){bossOnlyCleanupFailed=true;throw new IllegalStateException("BOSS_ONLY_CLOSE_FAILED_FENCE_RETAINED",failure);}
+        if(bossOnlyCleanupFailed)throw new IllegalStateException("BOSS_ONLY_PRIOR_CLOSE_FAILED");
+        if(release && bossProfileTicket!=null){bossProfileOwner.releaseBossHandoff(bossProfileTicket);bossProfileTicket=null;}
+    }
+    public void closeBossOnly() {
+        runOnPlaywright(()->{if(!bossOnlyMode)throw new IllegalStateException("NOT_BOSS_ONLY_OWNER");cleanupBossOnly(true);});
+    }
+
+    private Path userDataDir() {
+        return configuredUserDataDir == null || configuredUserDataDir.isBlank()
+                ? Paths.get(System.getProperty("user.dir"), "browser-data").toAbsolutePath().normalize()
+                : Paths.get(configuredUserDataDir).toAbsolutePath().normalize();
+    }
 
     // 平台URL常量
     private static final String BOSS_URL = "https://www.zhipin.com";
@@ -148,9 +258,11 @@ public class PlaywrightManager {
     // 这里把所有 Playwright 调用收敛到一个专用线程上串行执行。
     // ------------------------------------------------------------------
     private static final String PW_THREAD_NAME = "playwright-thread";
+    private volatile Thread playwrightOwnerThread;
 
     private final ExecutorService playwrightExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, PW_THREAD_NAME);
+        playwrightOwnerThread=thread;
         thread.setDaemon(true);
         return thread;
     });
@@ -160,7 +272,7 @@ public class PlaywrightManager {
 
     /** 当前是否已经在 Playwright 线程上（嵌套调用要就地执行，否则自己等自己会死锁） */
     private boolean onPlaywrightThread() {
-        return PW_THREAD_NAME.equals(Thread.currentThread().getName());
+        return Thread.currentThread()==playwrightOwnerThread;
     }
 
     /**
@@ -208,6 +320,7 @@ public class PlaywrightManager {
      * @return 是否真的提交了任务
      */
     public boolean tryRunOnPlaywright(Runnable task) {
+        if(bossOnlyMode)return false;
         if (playwrightQueueDepth.get() > 0) {
             return false;
         }
@@ -233,7 +346,7 @@ public class PlaywrightManager {
      * 除了命令行标志，这里再把 Preferences 里的退出状态直接改掉。
      */
     private void sanitizeProfileExitState() {
-        Path preferences = USER_DATA_DIR.resolve("Default").resolve("Preferences");
+        Path preferences = userDataDir().resolve("Default").resolve("Preferences");
         if (!Files.isRegularFile(preferences)) {
             return;
         }
@@ -285,6 +398,7 @@ public class PlaywrightManager {
     }
 
     private void initInternal() {
+        if(bossOnlyMode){initBossOnlyInternal();return;}
         if (isInitialized()) {
             return;
         }
@@ -302,7 +416,7 @@ public class PlaywrightManager {
 
             // 用持久化上下文启动：Patchright 官方明确要求用 launchPersistentContext，
             // 而不是 launch() + newContext()。登录态直接落盘到 USER_DATA_DIR。
-            context = playwright.chromium().launchPersistentContext(USER_DATA_DIR,
+            context = playwright.chromium().launchPersistentContext(userDataDir(),
                     new BrowserType.LaunchPersistentContextOptions()
                             .setChannel("chrome")   // 用本机真实 Chrome，而不是 Chromium
                             .setHeadless(false)     // 无头必被检测
@@ -339,7 +453,7 @@ public class PlaywrightManager {
                 browserClosed = true;
                 log.warn("检测到浏览器已关闭，下次操作会自动重新初始化");
             });
-            log.info("✓ Chrome已启动（持久化上下文: {}）", USER_DATA_DIR);
+            log.info("✓ Chrome已启动（持久化上下文: {}）", userDataDir());
             log.info("✓ BrowserContext已创建（所有平台共享）");
 
             // 顺序创建所有Page（避免并发创建Page导致的竞态条件）
@@ -403,7 +517,7 @@ public class PlaywrightManager {
      * 会静默退回官方 driver-bundle，反检测全部失效。所以这里自己找一遍，
      * 保证不管用什么方式启动，跑的都是 patchright。
      */
-    private Playwright createPlaywright() {
+    protected Playwright createPlaywright() {
         if (System.getProperty("playwright.cli.dir") == null) {
             Path driverDir = locatePatchrightDriver();
             if (driverDir != null) {
@@ -1076,6 +1190,7 @@ public class PlaywrightManager {
      * @param remark 备注信息
      */
   private void save51jobCookiesToDatabase(String remark) {
+      if(bossOnlyMode)throw new IllegalStateException("BOSS_ONLY_COOKIE_DB_DISABLED");
       try {
           List<com.microsoft.playwright.options.Cookie> cookies = filterCookiesByDomain(context.cookies(), JOB51_DOMAIN);
           // 使用ObjectMapper序列化为JSON字符串
@@ -1112,17 +1227,7 @@ public class PlaywrightManager {
      * 清理51job上下文中的Cookie
      */
     public void clear51jobCookies() {
-        try {
-            if (context != null) {
-                context.clearCookies();
-                log.info("已清理共享上下文中的所有Cookie");
-            } else {
-                log.warn("共享上下文不存在，无法清理Cookie");
-            }
-        } catch (Exception e) {
-            log.error("清理共享上下文Cookie失败: {}", e.getMessage(), e);
-            throw new RuntimeException("清理共享上下文Cookie失败", e);
-        }
+        clearCookiesForDomain(JOB51_DOMAIN);
     }
 
     /**
@@ -1506,6 +1611,7 @@ public class PlaywrightManager {
      * @param remark 备注信息
      */
     private void saveZhilianCookiesToDatabase(String remark) {
+        if(bossOnlyMode)throw new IllegalStateException("BOSS_ONLY_COOKIE_DB_DISABLED");
         try {
             List<com.microsoft.playwright.options.Cookie> cookies = filterCookiesByDomain(context.cookies(), ZHILIAN_DOMAIN);
             // 使用ObjectMapper序列化为JSON字符串
@@ -1546,17 +1652,7 @@ public class PlaywrightManager {
      * 清理智联招聘上下文中的Cookie
      */
     public void clearZhilianCookies() {
-        try {
-            if (context != null) {
-                context.clearCookies();
-                log.info("已清理共享上下文中的所有Cookie");
-            } else {
-                log.warn("共享上下文不存在，无法清理Cookie");
-            }
-        } catch (Exception e) {
-            log.error("清理共享上下文Cookie失败: {}", e.getMessage(), e);
-            throw new RuntimeException("清理共享上下文Cookie失败", e);
-        }
+        clearCookiesForDomain(ZHILIAN_DOMAIN);
     }
 
     /**
@@ -1613,6 +1709,7 @@ public class PlaywrightManager {
      * @param remark 备注信息
      */
     private void saveLiepinCookiesToDatabase(String remark) {
+        if(bossOnlyMode)throw new IllegalStateException("BOSS_ONLY_COOKIE_DB_DISABLED");
         try {
             List<com.microsoft.playwright.options.Cookie> cookies = filterCookiesByDomain(context.cookies(), LIEPIN_DOMAIN);
             // 使用ObjectMapper序列化为JSON字符串
@@ -1637,17 +1734,7 @@ public class PlaywrightManager {
      * 清理猎聘上下文中的Cookie
      */
     public void clearLiepinCookies() {
-        try {
-            if (context != null) {
-                context.clearCookies();
-                log.info("已清理共享上下文中的所有Cookie");
-            } else {
-                log.warn("共享上下文不存在，无法清理Cookie");
-            }
-        } catch (Exception e) {
-            log.error("清理共享上下文Cookie失败: {}", e.getMessage(), e);
-            throw new RuntimeException("清理共享上下文Cookie失败", e);
-        }
+        clearCookiesForDomain(LIEPIN_DOMAIN);
     }
 
     /**
@@ -1712,7 +1799,35 @@ public class PlaywrightManager {
      *
      * @param remark 备注信息
      */
+    private void clearCookiesForDomain(String domain) {
+        if(bossOnlyMode)throw new IllegalStateException("BOSS_ONLY_COOKIE_MUTATION_DISABLED");
+        if (context == null) {
+            log.warn("共享上下文不存在，无法清理Cookie");
+            return;
+        }
+        try {
+            List<Cookie> keep = context.cookies().stream()
+                    .filter(cookie -> cookie.domain == null || !isDomainMatch(cookie.domain, domain))
+                    .toList();
+            context.clearCookies();
+            if (!keep.isEmpty()) {
+                context.addCookies(keep);
+            }
+            log.info("已清理 {} 域Cookie，保留其他平台Cookie {} 条", domain, keep.size());
+        } catch (Exception e) {
+            log.error("清理 {} 域Cookie失败: {}", domain, e.getMessage(), e);
+            throw new RuntimeException("清理平台Cookie失败", e);
+        }
+    }
+
+    private boolean isDomainMatch(String cookieDomain, String platformDomain) {
+        String domain = cookieDomain.startsWith(".") ? cookieDomain.substring(1) : cookieDomain;
+        return domain.equalsIgnoreCase(platformDomain)
+                || domain.toLowerCase(Locale.ROOT).endsWith("." + platformDomain.toLowerCase(Locale.ROOT));
+    }
+
     private void saveBossCookiesToDatabase(String remark) {
+        if(bossOnlyMode)throw new IllegalStateException("BOSS_ONLY_COOKIE_DB_DISABLED");
         try {
             List<com.microsoft.playwright.options.Cookie> cookies = filterCookiesByDomain(context.cookies(), BOSS_DOMAIN);
             // 使用ObjectMapper序列化为JSON字符串
@@ -1738,17 +1853,7 @@ public class PlaywrightManager {
      * 用于退出登录时清除浏览器上下文中的所有Cookie
      */
     public void clearBossCookies() {
-        try {
-            if (context != null) {
-                context.clearCookies();
-                log.info("已清理共享上下文中的所有Cookie");
-            } else {
-                log.warn("共享上下文不存在，无法清理Cookie");
-            }
-        } catch (Exception e) {
-            log.error("清理共享上下文Cookie失败: {}", e.getMessage(), e);
-            throw new RuntimeException("清理共享上下文Cookie失败", e);
-        }
+        clearCookiesForDomain(BOSS_DOMAIN);
     }
 
     /**
@@ -1757,7 +1862,7 @@ public class PlaywrightManager {
      */
     @Scheduled(fixedDelay = 3000)
     public void scheduledLoginCheck() {
-        if (playwright == null || context == null) {
+        if (bossOnlyMode || !schedulingEnabled || playwright == null || context == null) {
             return;
         }
         // 必须跑在 Playwright 专用线程上；线程正忙（例如正在投递）就直接跳过这一轮，
@@ -1805,6 +1910,11 @@ public class PlaywrightManager {
      */
     @PreDestroy
     public void destroy() {
+        if(bossOnlyMode){
+            try { closeBossOnly(); }
+            finally { playwrightExecutor.shutdown(); }
+            return;
+        }
         log.info("开始关闭Playwright管理器...");
 
         try {
@@ -1858,6 +1968,7 @@ public class PlaywrightManager {
      * 发起任务前先过一遍这里。
      */
     public synchronized void ensureReady() {
+        if(bossOnlyMode){runOnPlaywright(this::initBossOnlyInternal);return;}
         if (isInitialized()) {
             return;
         }

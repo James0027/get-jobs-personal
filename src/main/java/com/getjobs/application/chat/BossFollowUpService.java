@@ -128,6 +128,9 @@ public class BossFollowUpService {
         }
         guard.assertCanSendChat();
 
+        // Freeze the slot before eligibility checks and slow model generation.
+        // A concurrent completed send must not turn this request into a new round.
+        int expectedClaimCount = store.followUpClaimCount(conversationId);
         long now = nowSupplier.getAsLong();
         Map<String, Object> evaluation = evaluateCandidate(conversationId, profile, now);
         if (!Boolean.TRUE.equals(evaluation.get("eligible"))) {
@@ -180,7 +183,8 @@ public class BossFollowUpService {
                 decision.resumeAssetId(), decision.evidenceFactIds(), now
         );
 
-        Suggestion claimed = store.claimFollowUp(conversationId, claim);
+        Suggestion claimed = store.claimFollowUp(conversationId, claim, expectedClaimCount,
+                (Long) evaluation.get("lastOutboundAt"));
         if (claimed == null) {
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("state", "blocked");

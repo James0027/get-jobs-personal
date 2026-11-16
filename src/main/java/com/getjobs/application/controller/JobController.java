@@ -13,6 +13,7 @@ import com.getjobs.worker.dto.JobProgressMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.ClientAbortException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -40,6 +41,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JobController {
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${app.scheduling.enabled:true}")
+    private boolean schedulingEnabled;
 
     // Services / Managers
     private final Job51Service job51Service;
@@ -183,7 +187,7 @@ public class JobController {
     /** 心跳 - 登录状态 SSE */
     @Scheduled(fixedRate = 30000)
     public void heartbeatLoginStatus() {
-        if (loginStatusEmitters.isEmpty()) return;
+        if (!schedulingEnabled || loginStatusEmitters.isEmpty()) return;
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
         for (SseEmitter emitter : loginStatusEmitters) {
             try {
@@ -207,7 +211,7 @@ public class JobController {
     /** 心跳 - Boss进度 SSE */
     @Scheduled(fixedRate = 30000)
     public void heartbeatJob51Progress() {
-        if (job51ProgressEmitters.isEmpty()) return;
+        if (!schedulingEnabled || job51ProgressEmitters.isEmpty()) return;
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
         for (SseEmitter emitter : job51ProgressEmitters) {
             try {
@@ -343,13 +347,13 @@ public class JobController {
             Map<String, Object> data = new HashMap<>();
             if (cookie != null) {
                 data.put("platform", cookie.getPlatform());
-                data.put("cookie_value", cookie.getCookieValue());
+                data.put("configured", cookie.getCookieValue() != null && !cookie.getCookieValue().isBlank());
                 data.put("remark", cookie.getRemark());
                 data.put("created_at", cookie.getCreatedAt());
                 data.put("updated_at", cookie.getUpdatedAt());
             } else {
                 data.put("platform", "51job");
-                data.put("cookie_value", null);
+                data.put("configured", false);
                 data.put("message", "未找到51job Cookie记录");
             }
             response.put("success", true);

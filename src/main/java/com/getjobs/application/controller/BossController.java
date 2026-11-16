@@ -8,6 +8,7 @@ import com.getjobs.worker.service.BossJobService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.ClientAbortException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @RequiredArgsConstructor
 public class BossController {
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${app.scheduling.enabled:true}")
+    private boolean schedulingEnabled;
 
     private final BossJobService bossJobService;
     private final PlaywrightManager playwrightManager;
@@ -225,7 +229,7 @@ public class BossController {
     /** 心跳 - Boss进度 SSE */
     @Scheduled(fixedRate = 30000)
     public void heartbeatBossProgress() {
-        if (bossProgressEmitters.isEmpty()) return;
+        if (!schedulingEnabled || bossProgressEmitters.isEmpty()) return;
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
         for (SseEmitter emitter : bossProgressEmitters) {
             try {

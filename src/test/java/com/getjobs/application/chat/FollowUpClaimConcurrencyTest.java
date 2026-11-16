@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.getjobs.application.chat.ChatContracts.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,18 +55,31 @@ class FollowUpClaimConcurrencyTest {
 
         CountDownLatch workflowEntered = new CountDownLatch(2);
         CountDownLatch releaseWorkflow = new CountDownLatch(1);
+        CountDownLatch firstAttemptFinished = new CountDownLatch(1);
+        AtomicInteger generationOrder = new AtomicInteger();
 
         when(workflow.generateFollowUp(any(), eq("c1"), any())).thenAnswer(inv -> {
+            int order = generationOrder.incrementAndGet();
             workflowEntered.countDown();
             releaseWorkflow.await(5, TimeUnit.SECONDS);
+            if (order == 2) {
+                assertTrue(firstAttemptFinished.await(5, TimeUnit.SECONDS),
+                        "The delayed generation must finish after the first send has settled");
+            }
             return new Decision("2", "req-1", Intent.OTHER, Action.AUTO_REPLY, "跟进内容", "", List.of("f1"), List.of(), "FOLLOW_UP", "");
         });
 
         BossFollowUpService service = new BossFollowUpService(store, workflow, browser, null, mockNow::get);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
-        Future<Integer> autoRunFuture = executor.submit(service::autoRun);
-        Future<Map<String, Object>> sendFuture = executor.submit(() -> service.send("c1"));
+        Future<Integer> autoRunFuture = executor.submit(() -> {
+            try { return service.autoRun(); }
+            finally { firstAttemptFinished.countDown(); }
+        });
+        Future<Map<String, Object>> sendFuture = executor.submit(() -> {
+            try { return service.send("c1"); }
+            finally { firstAttemptFinished.countDown(); }
+        });
 
         assertTrue(workflowEntered.await(5, TimeUnit.SECONDS), "Both threads must enter workflow");
         releaseWorkflow.countDown();
@@ -82,6 +96,27 @@ class FollowUpClaimConcurrencyTest {
         boolean autoRunWon = (autoRunSent == 1) && "blocked".equals(sendResult.get("state")) && "DUPLICATE_CLAIM".equals(sendResult.get("reasonCode"));
         boolean sendWon = (autoRunSent == 0) && "sent".equals(sendResult.get("state"));
         assertTrue(autoRunWon || sendWon, "Exactly one thread must win the claim; the other must be blocked by DUPLICATE_CLAIM or return 0");
+    }
+
+    @Test
+    void newOutboundDuringGenerationInvalidatesPendingFollowUp() throws Exception {
+        saveProfile(true, true, 24, 2);
+        long sentTime = mockNow.get() - (30 * 3600_000L);
+        store.save(new Suggestion("s0", 1, "c1", "m0", "v1", "sent", "初次沟通",
+                Intent.OTHER, Action.SUGGEST_REPLY, "", List.of(), "初次沟通", "", List.of("f1"), sentTime));
+        when(workflow.generateFollowUp(any(), eq("c1"), any())).thenAnswer(inv -> {
+            store.save(new Suggestion("s-new", 1, "c1", "m-new", "v1", "sent", "新的沟通",
+                    Intent.OTHER, Action.AUTO_REPLY, "", List.of(), "", "", List.of("f1"), mockNow.get()));
+            return new Decision("2", "req-late", Intent.OTHER, Action.AUTO_REPLY, "过期跟进",
+                    "", List.of("f1"), List.of(), "FOLLOW_UP", "");
+        });
+
+        BossFollowUpService service = new BossFollowUpService(store, workflow, browser, null, mockNow::get);
+        Map<String, Object> result = service.send("c1");
+
+        assertEquals("blocked", result.get("state"));
+        verify(browser, never()).send(any(), any(), anyString());
+        assertEquals(0, store.followUpClaimCount("c1"));
     }
 
     @Test
