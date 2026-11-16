@@ -24,6 +24,26 @@ spring:
     ansi:
       enabled: always
 
+# 运行开关：隔离联调时可关闭调度、自动浏览器和 UI 自动打开
+app:
+  scheduling:
+    enabled: true
+  browser:
+    auto-start: true
+    open-ui: true
+
+# 附件与浏览器数据目录；隔离联调时用命令行覆盖为临时目录
+boss:
+  resume:
+    document:
+      dir: ""
+    image:
+      dir: ""
+
+browser:
+  data:
+    dir: ""
+
 # 服务器配置
 server:
   port: 8888  # 后端 API 端口（原 9527 被本机 Clash/verge-mihomo 占用，改成 8888）

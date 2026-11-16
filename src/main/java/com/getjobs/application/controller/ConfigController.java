@@ -31,7 +31,9 @@ public class ConfigController {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            Map<String, String> configs = configService.getAllConfigsAsMap();
+            Map<String, Object> configs = new HashMap<>(configService.getAllConfigsAsMap());
+            Object key = configs.remove("API_KEY");
+            configs.put("API_KEY_CONFIGURED", key instanceof String s && !s.isBlank());
 
             response.put("success", true);
             response.put("data", configs);
@@ -40,9 +42,9 @@ public class ConfigController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("获取配置失败", e);
+            log.error("获取配置失败");
             response.put("success", false);
-            response.put("message", "获取配置失败: " + e.getMessage());
+            response.put("message", "获取配置失败: ");
             return ResponseEntity.internalServerError().body(response);
         }
     }
@@ -59,6 +61,11 @@ public class ConfigController {
         try {
             var config = configService.getConfigByKey(key);
 
+            if ("API_KEY".equals(key)) {
+                return ResponseEntity.ok(Map.of("success", true, "data", Map.of("configured",
+                        config != null && config.getConfigValue() != null && !config.getConfigValue().isBlank())));
+            }
+
             if (config != null) {
                 response.put("success", true);
                 response.put("data", config);
@@ -71,9 +78,9 @@ public class ConfigController {
             }
 
         } catch (Exception e) {
-            log.error("获取配置失败: {}", key, e);
+            log.error("获取配置失败: {}", key);
             response.put("success", false);
-            response.put("message", "获取配置失败: " + e.getMessage());
+            response.put("message", "获取配置失败: ");
             return ResponseEntity.internalServerError().body(response);
         }
     }
@@ -94,7 +101,12 @@ public class ConfigController {
                 return ResponseEntity.badRequest().body(response);
             }
 
-            int updateCount = configService.batchUpdateConfigs(configMap);
+            Map<String, String> updates = new HashMap<>(configMap);
+            if (updates.containsKey("API_KEY") && (updates.get("API_KEY") == null || updates.get("API_KEY").isBlank())) {
+                updates.remove("API_KEY");
+            }
+            updates.remove("API_KEY_CONFIGURED");
+            int updateCount = updates.isEmpty() ? 0 : configService.batchUpdateConfigs(updates);
 
             response.put("success", true);
             response.put("message", "配置更新成功");
@@ -104,9 +116,9 @@ public class ConfigController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("批量更新配置失败", e);
+            log.error("批量更新配置失败");
             response.put("success", false);
-            response.put("message", "配置更新失败: " + e.getMessage());
+            response.put("message", "配置更新失败: ");
             return ResponseEntity.internalServerError().body(response);
         }
     }
@@ -127,6 +139,10 @@ public class ConfigController {
         try {
             String value = requestBody.get("value");
 
+            if ("API_KEY".equals(key) && (value == null || value.isBlank())) {
+                return ResponseEntity.ok(Map.of("success", true, "message", "密钥保持不变"));
+            }
+
             if (value == null) {
                 response.put("success", false);
                 response.put("message", "配置值不能为空");
@@ -146,11 +162,20 @@ public class ConfigController {
             }
 
         } catch (Exception e) {
-            log.error("更新配置失败: {}", key, e);
+            log.error("更新配置失败: {}", key);
             response.put("success", false);
-            response.put("message", "配置更新失败: " + e.getMessage());
+            response.put("message", "配置更新失败: ");
             return ResponseEntity.internalServerError().body(response);
         }
+    }
+
+    @DeleteMapping("/API_KEY")
+    public ResponseEntity<Map<String, Object>> clearApiKey() {
+        // Explicit user action only. Never invoked by migration or ordinary blank saves.
+        if (!configService.updateConfig("API_KEY", "")) {
+            return ResponseEntity.internalServerError().body(Map.of("success", false, "message", "清除失败"));
+        }
+        return ResponseEntity.ok(Map.of("success", true, "data", Map.of("configured", false)));
     }
 
     /**

@@ -3,6 +3,7 @@ package com.getjobs.application.controller;
 import com.getjobs.application.chat.*;
 import com.getjobs.application.chat.ChatContracts.*;
 import com.getjobs.application.service.BossResumeDocumentService;
+import com.getjobs.application.service.BossResumeImageService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,13 +19,15 @@ public class BossChatController {
     private final BossChatMonitor monitor;
     private final BossChatBrowserGateway browser;
     private final BossResumeDocumentService documents;
+    private final BossResumeImageService images;
 
-    public BossChatController(BossChatStore store, BossAiWorkflowService workflow, BossChatMonitor monitor, BossChatBrowserGateway browser, BossResumeDocumentService documents) {
+    public BossChatController(BossChatStore store, BossAiWorkflowService workflow, BossChatMonitor monitor, BossChatBrowserGateway browser, BossResumeDocumentService documents, BossResumeImageService images) {
         this.store = store;
         this.workflow = workflow;
         this.monitor = monitor;
         this.browser = browser;
         this.documents = documents;
+        this.images = images;
     }
 
     public record ApprovalRequest(String expectedProfileVersion, String expectedTextHash) {}
@@ -39,11 +42,22 @@ public class BossChatController {
     public Profile profile(@RequestBody Profile profile) {
         String currentPdf = documents.currentAssetId();
         String approvedPdf = profile.approvedPdfAssetId() == null ? "" : profile.approvedPdfAssetId().trim();
+        String currentImage = images.currentAssetId();
+        String approvedImage = profile.approvedImageAssetId() == null ? "" : profile.approvedImageAssetId().trim();
         if (!approvedPdf.isEmpty() && !approvedPdf.equals(currentPdf)) {
             throw new IllegalArgumentException("请先上传并批准当前 PDF 简历");
         }
+        if (!approvedImage.isEmpty() && !approvedImage.equals(currentImage)) {
+            throw new IllegalArgumentException("请先上传并批准当前图片简历");
+        }
         if (profile.autoResume() && (approvedPdf.isEmpty() || !approvedPdf.equals(currentPdf))) {
             throw new IllegalArgumentException("请先上传并批准当前 PDF 简历");
+        }
+        if ("PDF".equals(profile.preferredResumeAssetKind()) && (approvedPdf.isEmpty() || !approvedPdf.equals(currentPdf))) {
+            throw new IllegalArgumentException("请先上传并批准当前 PDF 简历");
+        }
+        if ("IMAGE".equals(profile.preferredResumeAssetKind()) && (approvedImage.isEmpty() || !approvedImage.equals(currentImage))) {
+            throw new IllegalArgumentException("请先上传并批准当前图片简历");
         }
         return store.saveProfile(profile);
     }

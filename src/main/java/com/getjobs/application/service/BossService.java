@@ -382,7 +382,7 @@ public class BossService {
         config.setSayHi(entity.getSayHi());
         config.setTargetCount(entity.getTargetCount() == null ? 50 : entity.getTargetCount());
         config.setGraduationYear(entity.getGraduationYear());
-        config.setAiOnly(entity.getAiOnly() == null || entity.getAiOnly() == 1);
+        config.setAiOnly(entity.getAiOnly() != null && entity.getAiOnly() == 1);
         config.setAcceptedCities(parseListString(entity.getAcceptedCities()));
         config.setApprovedResume(Integer.valueOf(1).equals(entity.getApprovedResume()));
         config.setAutoResume(Integer.valueOf(1).equals(entity.getAutoResume()));

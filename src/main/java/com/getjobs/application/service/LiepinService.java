@@ -74,6 +74,18 @@ public class LiepinService {
             try { stmt.execute("ALTER TABLE liepin_data DROP COLUMN comp_full_name"); } catch (Exception ignored) {}
             try { stmt.execute("ALTER TABLE liepin_data DROP COLUMN comp_kind"); } catch (Exception ignored) {}
             log.info("确保 liepin_data 表已存在");
+
+            String createOptionSql = "CREATE TABLE IF NOT EXISTS liepin_option (" +
+                    " id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    " type VARCHAR(50)," +
+                    " name VARCHAR(100)," +
+                    " code VARCHAR(100)," +
+                    " sort_order INTEGER," +
+                    " created_at DATETIME," +
+                    " updated_at DATETIME" +
+                    ")";
+            stmt.execute(createOptionSql);
+            log.info("确保 liepin_option 表已存在");
         } catch (Exception e) {
             log.warn("创建 liepin_data 表失败: {}", e.getMessage());
         }

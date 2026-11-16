@@ -34,7 +34,8 @@ import com.getjobs.application.controller.BossChatController;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"app.static.enabled=false"})
 class B7IsolatedHttpTest {
 
     private static final Path TEMP_DIR;

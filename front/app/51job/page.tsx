@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTemplatePanel from '@/app/components/PlatformTemplatePanel'
+import LoginBrowserButton from '@/app/components/LoginBrowserButton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/51job/analysis/AnalysisContent'
 import { API_BASE } from '@/lib/api'
@@ -27,7 +29,7 @@ interface Job51Options { jobArea: Job51Option[]; salary: Job51Option[] }
 const MAX_SALARY_SELECTIONS = 5
 
 export default function Job51Page() {
-  const API = process.env.API_BASE_URL || `${API_BASE}`
+  const API = API_BASE
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isDelivering, setIsDelivering] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(true)
@@ -401,36 +403,34 @@ export default function Job51Page() {
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
         title="51job配置"
-        subtitle="配置51job平台的求职参数"
-        iconClass="text-foreground"
-        accentBgClass="bg-muted"
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            {checkingLogin ? (
-              <Button size="sm" disabled variant="outline">
-                <BiPlay className="mr-1" /> 检查登录中...
-              </Button>
-            ) : !isLoggedIn ? (
-              <Button size="sm" disabled variant="outline">
-                <BiPlay className="mr-1" /> 请先登录51job
-              </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isLoggedIn ? (
+              <LoginBrowserButton platform="51job" />
             ) : isDelivering ? (
-              <Button onClick={handleStopDelivery} size="sm" variant="destructive">
+              <Button onClick={handleStopDelivery} size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
                 <BiStop className="mr-1" /> 停止投递
               </Button>
             ) : (
-              <Button onClick={handleStartDelivery} size="sm" variant="default">
+              <Button onClick={handleStartDelivery} size="sm">
                 <BiPlay className="mr-1" /> 开始投递
               </Button>
             )}
-            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="outline">
-              <BiLogOut className="mr-1" /> 退出登录
-            </Button>
-            <Button onClick={handleSaveConfig} size="sm" variant="default">
+            <Button onClick={handleSaveConfig} size="sm" variant="outline">
               <BiSave className="mr-1" /> 保存配置
+            </Button>
+            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10">
+              <BiLogOut className="mr-1" /> 退出登录
             </Button>
           </div>
         }
+      />
+
+      <PlatformTemplatePanel
+        platform="JOB51"
+        loginState={checkingLogin ? 'checking' : isLoggedIn ? 'logged_in' : 'not_logged_in'}
+        taskState={isDelivering ? '任务进行中' : '未运行'}
+        onApplied={() => void fetchAllData()}
       />
 
       <Tabs defaultValue="config" className="w-full">
@@ -440,22 +440,6 @@ export default function Job51Page() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          {/* 平台说明 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-muted-foreground" />
-                51job 平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 51job 平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* 配置表单 */}
           <Card>
@@ -510,9 +494,6 @@ export default function Job51Page() {
                         ))}
                       </Select>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      {isCustomArea ? '手动输入城市码（例如：410代表北京）' : '从列表选择城市，或点击"手动输入"自定义'}
-                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>薪资范围（最多选择5个）</Label>

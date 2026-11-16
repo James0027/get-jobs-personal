@@ -1,5 +1,6 @@
 package com.getjobs.application.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -12,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -28,9 +31,13 @@ public class BossResumeImageService {
     public static final String PREVIEW_URL = "/api/boss/config/resume-image/content";
 
     private static final List<String> SUPPORTED_EXTENSIONS = List.of("png", "jpg", "gif");
-    private final Path storageDirectory = Paths.get(System.getProperty("user.dir"), "data", "boss", "resume")
-            .toAbsolutePath()
-            .normalize();
+    private final Path storageDirectory;
+
+    public BossResumeImageService(@Value("${boss.resume.image.dir:}") String directory) {
+        this.storageDirectory = directory == null || directory.isBlank()
+                ? Paths.get(System.getProperty("user.dir"), "data", "boss", "resume").toAbsolutePath().normalize()
+                : Paths.get(directory).toAbsolutePath().normalize();
+    }
 
     public synchronized ResumeImageInfo save(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
@@ -76,13 +83,45 @@ public class BossResumeImageService {
         return getCurrentImage()
                 .map(info -> Map.<String, Object>of(
                         "exists", true,
+                        "assetId", currentAssetId(),
+                        "kind", "IMAGE",
+                        "available", true,
                         "fileName", info.fileName(),
                         "contentType", info.contentType(),
                         "size", info.size(),
                         "updatedAt", info.updatedAt(),
                         "previewUrl", PREVIEW_URL
                 ))
-                .orElseGet(() -> Map.of("exists", false));
+                .orElseGet(() -> Map.of(
+                        "exists", false,
+                        "assetId", "",
+                        "kind", "IMAGE",
+                        "available", false,
+                        "previewUrl", PREVIEW_URL
+                ));
+    }
+
+    public String currentAssetId() {
+        Optional<Path> current = findCurrentImagePath();
+        if (current.isEmpty()) return "";
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(current.get()));
+            return "sha256:" + HexFormat.of().formatHex(digest);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public synchronized boolean deleteCurrentImage() {
+        boolean deleted = false;
+        for (String extension : SUPPORTED_EXTENSIONS) {
+            try {
+                deleted |= Files.deleteIfExists(storageDirectory.resolve("resume." + extension));
+            } catch (IOException e) {
+                return false;
+            }
+        }
+        return deleted;
     }
 
     private Optional<Path> findCurrentImagePath() {

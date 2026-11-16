@@ -342,6 +342,8 @@ pnpm dev
 ## 已知边界
 
 - **PDF 简历真实发送未实现**：决策为 PDF 时返回 `blocked/PDF_SEND_NOT_IMPLEMENTED`，不会降级发送图片。
+- **真实受控执行网关尚未接入**：`ControlledBossService.Gateway` 目前只有接口，生产环境默认拒绝（`PLATFORM_ENTRY_COUNT_AND_IDENTITY_NOT_VERIFIED`），不会自动投递；只有本地 DOM 测试提供测试替身。
+- **登录页可见性验收**：单平台登录浏览器只有在导航提交成功、目标页是可见前台标签页且没有遗留空白标签页时才报告 `running`；否则失败关闭，不会用缓存 URL 冒充已打开。
 - **真实聊天 DOM 未完整验收**：目前有本地 / Mock DOM 用例（`BOSS_CHAT_DOM_TEST=true`），线上页面仍需实际验证。
 - **Boss 实习届别取值**：未取得官方证据前不写入猜测值。
 - **自动回复与跟进默认关闭**：真实会话身份未绑定时 fail-closed（`IDENTITY_NOT_BOUND`）。

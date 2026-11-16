@@ -121,7 +121,10 @@ public class BossChatStore {
                 approvedHash,
                 derivedFactIds,
                 p.autoReply(),
-                followUp
+                followUp,
+                p.approvedImageAssetId(),
+                p.preferredResumeAssetKind(),
+                p.intentions()
         );
 
         jdbc.update("INSERT INTO boss_chat_profile(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload", json(saved));
@@ -380,18 +383,17 @@ public class BossChatStore {
         return count == null ? 0 : count;
     }
 
-    public synchronized Suggestion claimFollowUp(String conversationId, Suggestion claim) {
-        Integer inflight = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM boss_chat_suggestion WHERE conversation_id=? AND state='sending'",
-                Integer.class, conversationId);
-        if (inflight != null && inflight > 0) {
+    public synchronized Suggestion claimFollowUp(String conversationId, Suggestion claim,
+                                                 int expectedClaimCount, Long expectedLastOutboundAt) {
+        if (hasUnsettledSend(conversationId)) {
             return null;
         }
 
-        Integer count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM boss_chat_suggestion WHERE conversation_id=? AND message_id LIKE 'followup:%'",
-                Integer.class, conversationId);
-        int round = (count == null ? 0 : count) + 1;
+        if (followUpClaimCount(conversationId) != expectedClaimCount
+                || !Objects.equals(latestOutboundAt(conversationId), expectedLastOutboundAt)) {
+            return null;
+        }
+        int round = expectedClaimCount + 1;
         String messageId = "followup:" + round;
 
         Suggestion target = new Suggestion(

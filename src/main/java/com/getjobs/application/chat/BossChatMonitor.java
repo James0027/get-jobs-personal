@@ -2,6 +2,7 @@ package com.getjobs.application.chat;
 
 import com.getjobs.worker.boss.BossExecutionGuard;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
@@ -20,6 +21,9 @@ public class BossChatMonitor {
     private final BossFollowUpService followUpService;
     private final AtomicBoolean scanning = new AtomicBoolean();
     private volatile String error = "";
+
+    @Value("${app.scheduling.enabled:true}")
+    private boolean schedulingEnabled;
 
     public BossChatMonitor(BossChatStore store, BossChatBrowserGateway browser, BossAiWorkflowService workflow) {
         this(store, browser, workflow, new BossExecutionGuard(false), null);
@@ -48,7 +52,7 @@ public class BossChatMonitor {
 
     @Scheduled(fixedDelay = 30000, initialDelay = 30000)
     public void tick() {
-        if (guard.isReadOnlyCheckMode()) return;
+        if (!schedulingEnabled || guard.isReadOnlyCheckMode()) return;
         Profile profile = store.profile();
         if (profile.enabled() || profile.autoReply()) {
             try {

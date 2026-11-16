@@ -23,6 +23,12 @@ public class StartupRunner implements ApplicationRunner {
     @Value("${server.port:8888}")
     private int backendPort;
 
+    @Value("${app.browser.auto-start:true}")
+    private boolean autoStartBrowser;
+
+    @Value("${app.browser.open-ui:true}")
+    private boolean openUi;
+
     private static final int FRONTEND_PORT = 6866;
     private static final String FRONTEND_URL = "http://localhost:" + FRONTEND_PORT;
     private static final String BACKEND_URL = "http://localhost:";
@@ -32,11 +38,19 @@ public class StartupRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        String urlToOpen = determineUrlToOpen();
-        if (urlToOpen != null) {
-            openBrowser(urlToOpen);
+        if (!autoStartBrowser) {
+            log.info("自动浏览器初始化已禁用（app.browser.auto-start=false）");
+            return;
+        }
+        if (openUi) {
+            String urlToOpen = determineUrlToOpen();
+            if (urlToOpen != null) {
+                openBrowser(urlToOpen);
+            } else {
+                log.info("未找到可用的管理页面，跳过自动打开浏览器");
+            }
         } else {
-            log.info("未找到可用的管理页面，跳过自动打开浏览器");
+            log.info("管理页面自动打开已禁用（app.browser.open-ui=false）");
         }
 
         // 在尝试打开管理页面之后，初始化 Playwright（满足“先打开管理页，再实例化”）

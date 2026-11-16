@@ -7,6 +7,7 @@ import com.getjobs.worker.boss.BossExecutionGuard;
 import com.getjobs.worker.boss.delivery.DeliveryRun;
 import com.getjobs.worker.boss.delivery.DeliveryTaskStore;
 import com.getjobs.worker.boss.delivery.DeliveryConfiguration;
+import com.getjobs.application.search.DeliveryAuditSnapshot;
 import java.util.concurrent.atomic.AtomicBoolean;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
@@ -34,6 +35,7 @@ public class BossJobService implements JobPlatformService {
     private final ObjectProvider<Boss> bossProvider;
     private final DeliveryTaskStore deliveryTaskStore;
     private final BossExecutionGuard guard;
+    private final DeliveryAuditSnapshot auditSnapshots;
     private final AtomicBoolean executionLock = new AtomicBoolean();
     private volatile DeliveryRun deliveryRun;
 
@@ -51,17 +53,22 @@ public class BossJobService implements JobPlatformService {
         this(playwrightManager, configService, bossProvider, deliveryTaskStore, new BossExecutionGuard(false));
     }
 
-    @Autowired
     public BossJobService(PlaywrightManager playwrightManager,
                           ConfigService configService,
                           ObjectProvider<Boss> bossProvider,
                           DeliveryTaskStore deliveryTaskStore,
                           BossExecutionGuard guard) {
+        this(playwrightManager,configService,bossProvider,deliveryTaskStore,guard,null);
+    }
+    @Autowired
+    public BossJobService(PlaywrightManager playwrightManager, ConfigService configService, ObjectProvider<Boss> bossProvider,
+                          DeliveryTaskStore deliveryTaskStore, BossExecutionGuard guard, DeliveryAuditSnapshot auditSnapshots) {
         this.playwrightManager = playwrightManager;
         this.configService = configService;
         this.bossProvider = bossProvider;
         this.deliveryTaskStore = deliveryTaskStore;
         this.guard = guard != null ? guard : new BossExecutionGuard(false);
+        this.auditSnapshots = auditSnapshots;
     }
 
     public BossExecutionGuard getGuard() {
@@ -74,6 +81,9 @@ public class BossJobService implements JobPlatformService {
      * B2/B4: 同步原子预留执行权，校验前置，返回真实 taskId
      */
     public synchronized DeliveryReservation reserveDelivery(boolean resume) {
+        return reserveDelivery(resume,null);
+    }
+    public synchronized DeliveryReservation reserveDelivery(boolean resume,String templateId) {
         guard.assertCanDeliver();
 
         if (!executionLock.compareAndSet(false, true)) {
@@ -112,7 +122,8 @@ public class BossJobService implements JobPlatformService {
                         config.getTargetCount() == null ? 50 : config.getTargetCount(),
                         config.getCityCode(),
                         deliveryTaskStore::save,
-                        DeliveryConfiguration.fingerprint(config)
+                        DeliveryConfiguration.fingerprint(config),
+                        auditSnapshots==null?DeliveryAuditSnapshot.withoutProfileSource(config):auditSnapshots.capture(config,templateId)
                 );
                 String taskId = (String) deliveryRun.snapshot().get("taskId");
                 return new DeliveryReservation(taskId, false, config);

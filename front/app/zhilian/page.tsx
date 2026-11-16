@@ -11,6 +11,8 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/zhilian/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTemplatePanel from '@/app/components/PlatformTemplatePanel'
+import LoginBrowserButton from '@/app/components/LoginBrowserButton'
 import { API_BASE } from '@/lib/api'
 
 interface ZhilianConfig {
@@ -226,34 +228,34 @@ export default function ZhilianPage() {
       <PageHeader
         icon={<BiBriefcase className="text-xl" />}
         title="智联招聘配置"
-        subtitle="配置智联招聘平台的求职参数"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {checkingLogin ? (
-              <Button size="sm" disabled className="bg-muted text-muted-foreground cursor-not-allowed">
-                <BiPlay className="mr-1 text-muted-foreground" /> 检查登录中...
-              </Button>
-            ) : !isLoggedIn ? (
-              <Button size="sm" disabled className="bg-muted text-muted-foreground cursor-not-allowed">
-                <BiPlay className="mr-1 text-muted-foreground" /> 请先登录智联招聘
-              </Button>
+            {!isLoggedIn ? (
+              <LoginBrowserButton platform="zhilian" />
             ) : isDelivering ? (
-              <Button onClick={handleStopDelivery} size="sm" variant="destructive">
+              <Button onClick={handleStopDelivery} size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10">
                 <BiStop className="mr-1" /> 停止投递
               </Button>
             ) : (
-              <Button onClick={handleStartDelivery} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button onClick={handleStartDelivery} size="sm">
                 <BiPlay className="mr-1" /> 开始投递
               </Button>
             )}
-            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="destructive">
-              <BiLogOut className="mr-1" /> 退出登录
-            </Button>
-            <Button onClick={handleSaveConfig} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Button onClick={handleSaveConfig} size="sm" variant="outline">
               <BiSave className="mr-1" /> 保存配置
+            </Button>
+            <Button onClick={() => setShowLogoutDialog(true)} size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10">
+              <BiLogOut className="mr-1" /> 退出登录
             </Button>
           </div>
         }
+      />
+
+      <PlatformTemplatePanel
+        platform="ZHILIAN"
+        loginState={checkingLogin ? 'checking' : isLoggedIn ? 'logged_in' : 'not_logged_in'}
+        taskState={isDelivering ? '任务进行中' : '未运行'}
+        onApplied={() => void fetchAllData()}
       />
 
       <Tabs defaultValue="config" className="w-full">
@@ -263,22 +265,6 @@ export default function ZhilianPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          <Card className="bg-card border-border text-foreground shadow-none rounded-lg">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-muted-foreground" />
-                智联招聘平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录智联招聘平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击"开始投递"按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击"保存配置"按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* 配置表单 */}
           <Card className="bg-card border-border text-foreground shadow-none rounded-lg">
             <CardHeader>

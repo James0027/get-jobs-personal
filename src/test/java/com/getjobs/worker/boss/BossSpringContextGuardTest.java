@@ -86,6 +86,11 @@ class BossSpringContextGuardTest {
         ObjectMapper objectMapper() {
             return new ObjectMapper();
         }
+
+        @Bean
+        com.getjobs.application.search.DeliveryAuditSnapshot deliveryAuditSnapshot() {
+            return mock(com.getjobs.application.search.DeliveryAuditSnapshot.class);
+        }
     }
 
     @AfterEach

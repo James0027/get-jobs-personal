@@ -44,8 +44,12 @@ public class BossDeliveryController {
         }
     }
 
-    @PostMapping("/new")
     public ResponseEntity<Map<String, Object>> startNewDelivery() {
+        return startNewDelivery(null);
+    }
+    public record NewDeliveryRequest(String templateId) {}
+    @PostMapping("/new")
+    public ResponseEntity<Map<String,Object>> startNewDelivery(@RequestBody(required=false) NewDeliveryRequest request) {
         if (playwrightManager != null && !playwrightManager.isLoggedIn("boss")) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
@@ -56,7 +60,8 @@ public class BossDeliveryController {
         BossJobService.DeliveryReservation reservation;
         try {
             // 原子预留执行权，前置完成校验并分配真实 taskId
-            reservation = jobs.reserveDelivery(false);
+            reservation = request==null||request.templateId()==null||request.templateId().isBlank()
+                    ?jobs.reserveDelivery(false):jobs.reserveDelivery(false,request.templateId());
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
                     "success", false,

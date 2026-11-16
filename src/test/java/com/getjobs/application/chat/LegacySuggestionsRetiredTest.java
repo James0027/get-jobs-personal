@@ -5,6 +5,7 @@ import com.getjobs.application.chat.ChatContracts.*;
 import com.getjobs.application.controller.BossChatController;
 import com.getjobs.application.service.AiService;
 import com.getjobs.application.service.BossResumeDocumentService;
+import com.getjobs.application.service.BossResumeImageService;
 import com.getjobs.worker.boss.BossExecutionGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,8 @@ class LegacySuggestionsRetiredTest {
         BossChatMonitor monitor = mock(BossChatMonitor.class);
         BossResumeDocumentService documents = mock(BossResumeDocumentService.class);
 
-        BossChatController controller = new BossChatController(store, workflow, monitor, browser, documents);
+        BossResumeImageService images = mock(BossResumeImageService.class);
+        BossChatController controller = new BossChatController(store, workflow, monitor, browser, documents, images);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

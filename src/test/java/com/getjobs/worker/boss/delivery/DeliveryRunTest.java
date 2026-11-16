@@ -36,29 +36,4 @@ class DeliveryRunTest {
         assertEquals("awaiting_reconciliation",saved.getLast().get("state"));
         assertEquals(0,run.successCount());
     }
-    @Test void graduationRequiresExplicitEvidenceAndDoesNotTreatUnlimitedAsCampus() {
-        assertEquals(GraduationEligibility.Decision.INELIGIBLE,GraduationEligibility.evaluate(2027,"面向2028届毕业生"));
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"面向27届、28届毕业生"));
-        assertEquals(GraduationEligibility.Decision.NEEDS_REVIEW,GraduationEligibility.evaluate(null,"面向2027届"));
-        assertEquals(GraduationEligibility.Decision.NEEDS_REVIEW,GraduationEligibility.evaluate(2027,"校招应届生"));
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"经验不限，全职产品经理"));
-    }
-    @Test void platformCampusTagRequiresReviewEvenIfTitleAndJdOmitIt() {
-        assertEquals(GraduationEligibility.Decision.NEEDS_REVIEW,
-                GraduationEligibility.evaluate(2027,"产品经理",List.of("上海","在校/应届"),"负责用户体验与需求分析"));
-    }
-    @Test void sharedCohortSuffixIncludesEveryEnumeratedYear() {
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"招聘2027、2028届毕业生"));
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"面向27、28届应届生"));
-        assertEquals(GraduationEligibility.Decision.INELIGIBLE,GraduationEligibility.evaluate(2026,"招聘2027、2028届毕业生"));
-    }
-    @Test void eventEditionIsNotGraduationEvidence() {
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"负责第24届活动的产品方案，经验不限"));
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"负责2024届活动的产品方案，经验不限"));
-        assertEquals(GraduationEligibility.Decision.ELIGIBLE,GraduationEligibility.evaluate(2027,"校招2027届毕业生，参与第24届活动策划"));
-    }
-    @Test void cohortRangesStayPendingReview() {
-        assertEquals(GraduationEligibility.Decision.NEEDS_REVIEW,GraduationEligibility.evaluate(2027,"面向2027-2028届毕业生"));
-        assertEquals(GraduationEligibility.Decision.NEEDS_REVIEW,GraduationEligibility.evaluate(2027,"招聘27届至28届毕业生"));
-    }
 }

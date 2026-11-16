@@ -25,6 +25,13 @@ public class BossExecutionGuard {
         return readOnlyCheckMode;
     }
 
+    public void assertControlledAction(com.getjobs.worker.boss.controlled.ControlledTarget.Permit permit,
+            com.getjobs.worker.boss.controlled.ControlledTarget observed,
+            com.getjobs.worker.boss.controlled.ControlledTarget.Action action) {
+        if (!readOnlyCheckMode || permit == null) throw new IllegalStateException("CONTROLLED_PERMIT_REQUIRED");
+        permit.consume(observed, action);
+    }
+
     public void assertCanDeliver() {
         if (readOnlyCheckMode) {
             throw new IllegalStateException("只读检查模式已生效，禁止启动投递外发任务");

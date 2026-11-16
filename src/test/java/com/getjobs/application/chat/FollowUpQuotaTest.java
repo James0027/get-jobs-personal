@@ -119,7 +119,7 @@ class FollowUpQuotaTest {
 
         // Pre-existing claim that failed (claims=1, count=0)
         Suggestion claim = new Suggestion("s-claim", 1, "c1", "", "v1", "sending", "跟进", Intent.OTHER, Action.AUTO_REPLY, "", List.of(), "", "", List.of("f1"), sentTime);
-        store.claimFollowUp("c1", claim);
+        store.claimFollowUp("c1", claim, 0, sentTime);
         store.transition("s-claim", "sending", "failed");
 
         assertEquals(0, store.followUpCount("c1"));
