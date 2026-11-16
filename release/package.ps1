@@ -39,7 +39,7 @@ $dbPath = Join-Path $stage 'db/getjobs.db'
 & $Sqlite $dbPath ".read $releaseDir\db-template.sql"
 if ($LASTEXITCODE -ne 0) { throw 'Failed to create schema-only db template' }
 $rows = (& $Sqlite $dbPath "SELECT (SELECT COUNT(*) FROM config)+(SELECT COUNT(*) FROM boss_config)+(SELECT COUNT(*) FROM cookie)+(SELECT COUNT(*) FROM ai);").Trim()
-$tables = (& $Sqlite $dbPath "SELECT COUNT(*) FROM sqlite_master WHERE type='table';").Trim()
+$tables = (& $Sqlite $dbPath "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';").Trim()
 if ($rows -ne '0') { throw "Template db must have 0 personal/default rows, found: $rows" }
 if ([int]$tables -lt 20) { throw "Template db has too few tables: $tables" }
 

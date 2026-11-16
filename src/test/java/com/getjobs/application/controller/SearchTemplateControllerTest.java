@@ -33,7 +33,8 @@ class SearchTemplateControllerTest {
         store=new SearchTemplateStore(jdbc,mapper);store.init();
         catalog=mock(SearchPlatformCatalog.class);var profiles=mock(BossChatStore.class);
         when(profiles.profile()).thenReturn(ChatContracts.Profile.empty());
-        mvc=MockMvcBuilders.standaloneSetup(new SearchTemplateController(store,catalog,profiles,mapper)).build();
+        var resolver=new SearchTemplateResolver(store,catalog,profiles,mapper);
+        mvc=MockMvcBuilders.standaloneSetup(new SearchTemplateController(store,catalog,resolver)).build();
     }
     @AfterEach void close(){ds.destroy();}
     String create() throws Exception {return mapper.readTree(mvc.perform(post("/api/search-templates").contentType(APPLICATION_JSON).content(body))

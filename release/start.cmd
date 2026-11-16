@@ -22,9 +22,10 @@ if not "%PORT_STATE%"=="10" (
 )
 
 rem JDK 21 required. Uses JAVA_HOME when valid, otherwise auto-detects a local JDK 21.
-set "JAVA_HOME="
-for /f "delims=" %%D in ('powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0find-jdk.ps1"') do if not defined JAVA_HOME set "JAVA_HOME=%%D"
-if not defined JAVA_HOME goto :nojdk
+set "FOUND_JDK="
+for /f "delims=" %%D in ('powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0find-jdk.ps1"') do set "FOUND_JDK=%%D"
+if not defined FOUND_JDK goto :nojdk
+set "JAVA_HOME=%FOUND_JDK%"
 :havejdk
 set "PATH=%JAVA_HOME%\bin;%PATH%"
 
