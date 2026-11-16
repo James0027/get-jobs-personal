@@ -125,6 +125,10 @@ public class StartupRunner implements ApplicationRunner {
      */
     private boolean hasStaticResources() {
         try {
+            // Packaged JAR: dist lives on the classpath, not under src/main/resources.
+            if (getClass().getClassLoader().getResource("dist/index.html") != null) {
+                return true;
+            }
             // 检查dist文件夹是否存在
             java.io.File distDir = new java.io.File("src/main/resources/dist");
             if (distDir.exists() && distDir.isDirectory()) {

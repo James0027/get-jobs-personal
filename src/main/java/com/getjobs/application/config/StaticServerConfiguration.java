@@ -4,12 +4,16 @@ import org.apache.catalina.connector.Connector;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Files;
@@ -54,6 +58,13 @@ public class StaticServerConfiguration {
                 log.info("未检测到前端开发服务，但找到静态资源");
                 log.info("配置额外端口 {} 用于提供静态资源", frontendPort);
 
+                // The sidecar is optional: Windows may reserve this port (dynamic exclusions),
+                // and a failed extra connector must not prevent the main UI/API on 8888.
+                if (!canBindLoopback(frontendPort)) {
+                    log.warn("端口 {} 不可绑定（可能被系统保留或占用），继续仅使用主端口提供管理页面", frontendPort);
+                    return;
+                }
+
                 Connector connector = new Connector(TomcatServletWebServerFactory.DEFAULT_PROTOCOL);
                 connector.setPort(frontendPort);
                 connector.setProperty("address", "127.0.0.1");
@@ -62,6 +73,15 @@ public class StaticServerConfiguration {
                 log.warn("未检测到前端开发服务，也未找到静态资源");
             }
         };
+    }
+
+    private boolean canBindLoopback(int port) {
+        try (ServerSocket socket = new ServerSocket()) {
+            socket.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port));
+            return true;
+        } catch (IOException error) {
+            return false;
+        }
     }
 
     /**
@@ -115,11 +135,15 @@ public class StaticServerConfiguration {
 
         boolean hasDist = hasContent(distPath);
         boolean hasStatic = hasContent(staticPath);
+        boolean hasClasspathDist = new ClassPathResource("dist/index.html").exists();
+        boolean hasClasspathStatic = new ClassPathResource("static/index.html").exists();
 
         log.info("  dist存在: {}", hasDist);
         log.info("  static存在: {}", hasStatic);
+        log.info("  JAR内dist存在: {}", hasClasspathDist);
+        log.info("  JAR内static存在: {}", hasClasspathStatic);
 
-        return hasDist || hasStatic;
+        return hasDist || hasStatic || hasClasspathDist || hasClasspathStatic;
     }
 
     /**
